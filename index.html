@@ -17,10 +17,31 @@
     font-family: system-ui, -apple-system, "Segoe UI", "PingFang SC", sans-serif; }
   body { background: var(--bg); }
 
-  #canvas { position: absolute; inset: 0; overflow: hidden; }
+  #canvas { position: absolute; inset: 0; overflow: hidden; cursor: default; }
+  #canvas.panning { cursor: grabbing; }
 
-  /* ---------- 连线 SVG 层 ---------- */
-  svg#edges { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 1; }
+  /* world：所有内容的坐标容器，通过 transform 实现缩放平移 */
+  #world {
+    position: absolute; left: 0; top: 0;
+    transform-origin: 0 0;
+    width: 0; height: 0;
+  }
+  /* grid 背景随 world 移动 */
+  #canvas::before {
+    content: ''; position: absolute; inset: 0; z-index: 0; pointer-events: none;
+    background-image:
+      linear-gradient(rgba(0,0,0,.045) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(0,0,0,.045) 1px, transparent 1px);
+    background-size: var(--grid, 24px) var(--grid, 24px);
+    background-position: var(--gx, 0) var(--gy, 0);
+  }
+
+  /* ---------- 连线 SVG 层（在 world 内，覆盖很大的世界坐标范围）---------- */
+  svg#edges {
+    position: absolute; left: 0; top: 0;
+    width: 100000px; height: 100000px;
+    overflow: visible; pointer-events: none; z-index: 1;
+  }
   svg#edges .wire { fill: none; stroke: var(--line); stroke-width: 2.5; pointer-events: stroke; cursor: pointer; }
   svg#edges .wire:hover { stroke: #6b7280; }
   svg#edges .wire.executable { stroke: var(--accent); stroke-width: 3.5; }
@@ -89,6 +110,19 @@
   .node .out { font-family: inherit; white-space: pre-wrap; overflow-y: auto; }
   .node .out.empty::before { content: "（执行结果会出现在这里）"; color: #b3b6bb; }
 
+  /* 图片节点 */
+  .node[data-kind="img"] .body { overflow: hidden; background:
+    repeating-conic-gradient(#eee 0 25%, #fff 0 50%) 0 0 / 16px 16px; }
+  .node[data-kind="img"] img {
+    width: 100%; height: 100%; object-fit: contain; display: block; pointer-events: none;
+  }
+  .node .img-drop {
+    position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+    color: #b3b6bb; font-size: 12.5px; text-align: center; padding: 10px; pointer-events: none;
+  }
+  .node[data-kind="img"].has-img .img-drop { display: none; }
+  .node.drop-target { outline: 3px dashed var(--accent); outline-offset: 2px; }
+
   /* ---------- 端口（连线锚点）---------- */
   .port {
     position: absolute; width: 14px; height: 14px; border-radius: 50%;
@@ -132,23 +166,59 @@
     background: #f0f1f3; border: 1px solid #d5d7db; border-bottom-width: 2px;
     border-radius: 4px; padding: 0 5px; font-size: 11px; font-family: inherit;
   }
+
+  /* 右下角视图控件 */
+  #viewctl {
+    position: fixed; right: 16px; bottom: 16px; z-index: 20;
+    display: flex; gap: 6px; align-items: center;
+    background: #fff; padding: 6px; border-radius: 10px;
+    box-shadow: 0 3px 16px rgba(0,0,0,.12);
+  }
+  #viewctl button { padding: 6px 10px; background: #eef0f3; color: #333; }
+  #viewctl button:hover { background: #e2e5ea; }
+  #zoomLabel { font-size: 12px; color: #666; min-width: 42px; text-align: center; }
+
+  /* 小地图 */
+  #minimap {
+    position: fixed; right: 16px; bottom: 66px; z-index: 19;
+    width: 220px; height: 150px;
+    background: rgba(255,255,255,.92); border: 1px solid var(--border);
+    border-radius: 10px; box-shadow: 0 3px 16px rgba(0,0,0,.12);
+    overflow: hidden; cursor: pointer;
+  }
+  #minimap.hidden { display: none; }
+  #minimap canvas { display: block; width: 100%; height: 100%; }
 </style>
 </head>
 <body>
 
 <div id="canvas">
-  <svg id="edges"></svg>
+  <div id="world">
+    <svg id="edges"></svg>
+  </div>
+</div>
+
+<div id="minimap"><canvas></canvas></div>
+
+<div id="viewctl">
+  <button id="zoomOut" title="缩小">−</button>
+  <span id="zoomLabel">100%</span>
+  <button id="zoomIn" title="放大">＋</button>
+  <button id="fit" title="适应全部内容">适应</button>
+  <button id="reset1" title="100% 居中">1:1</button>
+  <button id="toggleMap" title="显示/隐藏小地图">地图</button>
 </div>
 
 <div id="toolbar">
   <input id="apiKey" class="key" type="password" placeholder="DeepSeek API Key" />
   <button class="ghost" id="addDoc">＋ 文档节点</button>
   <button class="ghost" id="addOutput">＋ 输出节点</button>
+  <button class="ghost" id="addImg">＋ 图片节点</button>
   <button id="runAll">全部运行 ▶</button>
   <span id="hint">
-    连出线：拖节点右侧圆点 → 落到另一节点<br>
-    编辑命令：单击连线上的标签 ·
-    执行：<kbd>Alt</kbd>+<kbd>Enter</kbd>（悬停/选中连线时）
+    连出线：拖节点右侧圆点 → 落到另一节点 · 图片：拖入/粘贴到图片节点，可从前连到输出节点让模型识别<br>
+    编辑命令：单击连线上的标签 · 执行：<kbd>Alt</kbd>+<kbd>Enter</kbd> ·
+    平移：空白处拖拽或空格拖 · 缩放：<kbd>Ctrl</kbd>滚轮
   </span>
 </div>
 
@@ -186,20 +256,84 @@ window.DBG = DBG;
 window.state = state; // 方便控制台检查
 
 // =========================================================================
+// 1.5 视口（缩放 / 平移）—— “从全局观察整张图”的基础
+// =========================================================================
+const view = { x: 0, y: 0, scale: 1 };   // world 原点在屏幕的位置与缩放
+
+function worldEl() { return document.getElementById('world'); }
+function canvasEl() { return document.getElementById('canvas'); }
+
+function applyView() {
+  const w = worldEl();
+  w.style.transform = `translate(${view.x}px, ${view.y}px) scale(${view.scale})`;
+  // 网格背景跟随
+  const c = canvasEl();
+  c.style.setProperty('--grid', (24 * view.scale) + 'px');
+  c.style.setProperty('--gx', view.x + 'px');
+  c.style.setProperty('--gy', view.y + 'px');
+  const label = document.getElementById('zoomLabel');
+  if (label) label.textContent = Math.round(view.scale * 100) + '%';
+  drawMiniMap();
+}
+
+// 屏幕坐标 -> world 坐标
+function screenToWorld(sx, sy) {
+  const r = canvasEl().getBoundingClientRect();
+  return {
+    x: (sx - r.left - view.x) / view.scale,
+    y: (sy - r.top  - view.y) / view.scale,
+  };
+}
+
+function zoomAt(screenX, screenY, factor) {
+  const r = canvasEl().getBoundingClientRect();
+  const px = screenX - r.left, py = screenY - r.top;
+  const wx = (px - view.x) / view.scale;
+  const wy = (py - view.y) / view.scale;
+  const next = Math.min(3, Math.max(0.15, view.scale * factor));
+  view.scale = next;
+  view.x = px - wx * next;
+  view.y = py - wy * next;
+  applyView();
+}
+
+function panBy(dx, dy) { view.x += dx; view.y += dy; applyView(); }
+
+// 让所有内容居中且刚好容纳
+function fitToContent(padding = 60) {
+  const nodes = Object.values(state.nodes);
+  if (!nodes.length) { view.x = 0; view.y = 0; view.scale = 1; applyView(); return; }
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  for (const n of nodes) {
+    minX = Math.min(minX, n.x); minY = Math.min(minY, n.y);
+    maxX = Math.max(maxX, n.x + n.w); maxY = Math.max(maxY, n.y + n.h);
+  }
+  const r = canvasEl().getBoundingClientRect();
+  const cw = maxX - minX, ch = maxY - minY;
+  const sx = (r.width  - padding * 2) / cw;
+  const sy = (r.height - padding * 2) / ch;
+  view.scale = Math.min(2, Math.max(0.15, Math.min(sx, sy)));
+  view.x = (r.width  - cw * view.scale) / 2 - minX * view.scale;
+  view.y = (r.height - ch * view.scale) / 2 - minY * view.scale;
+  applyView();
+}
+
+// =========================================================================
 // 2. 节点增删
 // =========================================================================
 function createNode(kind, opts = {}) {
   const id = 'n' + (++nodeSeq);
-  const isOutput = kind === 'output';
+  const titles = { output: '输出', img: '图片', doc: '文档' };
   const node = {
     id,
-    kind,                                  // 'doc' | 'output'
-    title: opts.title || (isOutput ? '输出' : '文档'),
+    kind,                                  // 'doc' | 'output' | 'img'
+    title: opts.title || titles[kind] || '节点',
     x: opts.x ?? (80 + (nodeSeq % 6) * 40),
     y: opts.y ?? (80 + (nodeSeq % 6) * 40),
-    w: opts.w ?? 300,                      // 宽度可直接控制
-    h: opts.h ?? 160,                      // 高度可直接控制
+    w: opts.w ?? (kind === 'img' ? 240 : 300),   // 宽度可直接控制
+    h: opts.h ?? (kind === 'img' ? 200 : 160),   // 高度可直接控制
     text: opts.text ?? '',
+    src: opts.src ?? '',                   // 图片节点的 dataURL
     el: null,
   };
   state.nodes[id] = node;
@@ -252,7 +386,42 @@ function renderNode(node) {
   el.querySelector('.title').textContent = node.title;
 
   const body = el.querySelector('.body');
-  if (node.kind === 'output') {
+  if (node.kind === 'img') {
+    // 图片节点：支持文件选择 / 拖拽 / 粘贴
+    const img = document.createElement('img');
+    img.alt = '';
+    if (node.src) { img.src = node.src; el.classList.add('has-img'); }
+    const drop = document.createElement('div');
+    drop.className = 'img-drop';
+    drop.textContent = '拖入 / 点击选择 / 粘贴图片';
+    drop.title = '图片节点可作为连线源，交给视觉模型识别';
+    body.appendChild(img);
+    body.appendChild(drop);
+    node.imgEl = img;
+    el.addEventListener('click', () => {
+      const inp = document.createElement('input');
+      inp.type = 'file'; inp.accept = 'image/*';
+      inp.onchange = () => inp.files[0] && loadImageFile(node, inp.files[0]);
+      inp.click();
+    });
+    el.addEventListener('dragover', (e) => {
+      if (e.dataTransfer?.types?.includes('Files')) {
+        e.preventDefault(); el.classList.add('drop-target');
+      }
+    });
+    el.addEventListener('dragleave', () => el.classList.remove('drop-target'));
+    el.addEventListener('drop', (e) => {
+      const f = [...(e.dataTransfer?.files || [])].find(f => f.type.startsWith('image/'));
+      if (f) { e.preventDefault(); e.stopPropagation(); el.classList.remove('drop-target'); loadImageFile(node, f); }
+    });
+    // 粘贴（聚焦该节点时）
+    el.addEventListener('paste', (e) => {
+      const f = [...(e.clipboardData?.items || [])]
+        .find(i => i.type.startsWith('image/'))?.getAsFile();
+      if (f) { e.preventDefault(); loadImageFile(node, f); }
+    });
+    el.tabIndex = 0;
+  } else if (node.kind === 'output') {
     const out = document.createElement('div');
     out.className = 'out empty';
     out.contentEditable = 'true';           // 允许手动改
@@ -308,8 +477,20 @@ function renderNode(node) {
     startResize(e, node);
   });
 
-  document.getElementById('canvas').appendChild(el);
+  worldEl().appendChild(el);   // 节点进入 world 坐标系
   node.el = el;
+}
+
+// 把图片文件读成 dataURL 挂到图片节点上
+function loadImageFile(node, file) {
+  const reader = new FileReader();
+  reader.onload = () => {
+    node.src = reader.result;
+    node.imgEl.src = node.src;
+    node.el.classList.add('has-img');
+    DBG.log('图片载入', node.id, file.name, Math.round(file.size / 1024) + 'KB');
+  };
+  reader.readAsDataURL(file);
 }
 
 function layoutNode(node) {
@@ -332,8 +513,9 @@ function startDrag(e, node) {
   const startX = e.clientX, startY = e.clientY;
   const origX = node.x, origY = node.y;
   function onMove(ev) {
-    node.x = origX + (ev.clientX - startX);
-    node.y = origY + (ev.clientY - startY);
+    // 除以 scale：鼠标在屏幕上动 1px，节点在 world 中只应动 1/scale
+    node.x = origX + (ev.clientX - startX) / view.scale;
+    node.y = origY + (ev.clientY - startY) / view.scale;
     layoutNode(node);
     redrawEdges();
   }
@@ -352,8 +534,9 @@ function startResize(e, node) {
   const startX = e.clientX, startY = e.clientY;
   const ow = node.w, oh = node.h;
   function onMove(ev) {
-    node.w = Math.max(120, ow + (ev.clientX - startX));
-    node.h = Math.max(80,  oh + (ev.clientY - startY));
+    // 同样按 scale 换算
+    node.w = Math.max(120, ow + (ev.clientX - startX) / view.scale);
+    node.h = Math.max(80,  oh + (ev.clientY - startY) / view.scale);
     layoutNode(node);
     redrawEdges();
     layoutEdgeLabel(node);      // 若此节点是端点，标签位置也要更新
@@ -370,19 +553,18 @@ function startResize(e, node) {
 // 6. 连线：从端口拖出
 // =========================================================================
 function startLinkFrom(node, e) {
-  const r = node.el.getBoundingClientRect();
-  const c = document.getElementById('canvas').getBoundingClientRect();
-  pendingLink = {
-    source: node.id,
-    x1: r.right - c.left,
-    y1: r.top - c.top + r.height / 2,
-    x2: e.clientX - c.left,
-    y2: e.clientY - c.top,
-  };
+  // 用 world 坐标（因为预览线画在 #edges 里，而 #edges 在 #world 中）
+  function endpointXY(ofNode) {
+    return { x: ofNode.x + ofNode.w, y: ofNode.y + ofNode.h / 2 };
+  }
+  const s = endpointXY(node);
+  const p = screenToWorld(e.clientX, e.clientY);
+  pendingLink = { source: node.id, x1: s.x, y1: s.y, x2: p.x, y2: p.y };
   function onMove(ev) {
     if (!pendingLink) return;
-    pendingLink.x2 = ev.clientX - c.left;
-    pendingLink.y2 = ev.clientY - c.top;
+    const q = screenToWorld(ev.clientX, ev.clientY);
+    pendingLink.x2 = q.x;
+    pendingLink.y2 = q.y;
     drawGhost(pendingLink);
   }
   function onUp(ev) {
@@ -434,11 +616,9 @@ function edgeGeometry(edge) {
   const a = state.nodes[edge.source];
   const b = state.nodes[edge.target];
   if (!a || !b) return null;
-  const c = document.getElementById('canvas').getBoundingClientRect();
-  const ra = a.el.getBoundingClientRect();
-  const rb = b.el.getBoundingClientRect();
-  const x1 = ra.right - c.left, y1 = ra.top - c.top + ra.height / 2;
-  const x2 = rb.left  - c.left, y2 = rb.top - c.top + rb.height / 2;
+  // 直接使用 world 坐标（节点在 world 中，边也画在 world 中）
+  const x1 = a.x + a.w, y1 = a.y + a.h / 2;
+  const x2 = b.x,       y2 = b.y + b.h / 2;
   return { x1, y1, x2, y2 };
 }
 
@@ -467,6 +647,7 @@ function redrawEdges() {
     edge.pathEl = p;
     layoutEdgeLabel(edge);
   }
+  drawMiniMap();
 }
 
 function drawGhost(link) {
@@ -488,7 +669,7 @@ function createEdgeLabel(edge) {
   const el = document.createElement('div');
   el.className = 'edge-label placeholder';
   el.textContent = '+ 命令';
-  document.getElementById('canvas').appendChild(el);
+  worldEl().appendChild(el);       // 标签也进入 world 坐标系，随缩放平移
   edge.labelEl = el;
 
   el.addEventListener('click', (e) => { e.stopPropagation(); selectEdge(edge.id); });
@@ -499,8 +680,7 @@ function layoutEdgeLabel(edge) {
   if (!edge.labelEl) return;
   const g = edgeGeometry(edge);
   if (!g) return;
-  // edgeGeometry 已基于 canvas 坐标系（已减去 canvas 的 left/top），
-  // 标签又是绝对定位在 #canvas 内，所以直接用 mid 坐标即可。
+  // edgeGeometry 已是 world 坐标，标签又定位在 #world 内，直接用 mid 坐标
   const mx = (g.x1 + g.x2) / 2;
   const my = (g.y1 + g.y2) / 2;
   edge.labelEl.style.left = mx + 'px';
@@ -536,7 +716,8 @@ function editEdgeLabel(edge) {
   input.style.left = label.style.left;
   input.style.top = label.style.top;
   label.style.visibility = 'hidden';
-  document.getElementById('canvas').appendChild(input);
+  worldEl().appendChild(input);           // 输入框也放进 world
+  input.style.transform = `translate(-50%, -50%) scale(${1 / view.scale})`;
   input.focus();
   input.select();
 
@@ -585,7 +766,17 @@ async function runEdge(edgeId) {
   const dst = state.nodes[edge.target];
   if (!src || !dst) { DBG.err('端点节点不存在'); return; }
   const doc = src.text || '';
-  DBG.log('输入文档长度 =', doc.length, '前50字 =', JSON.stringify(doc.slice(0, 50)));
+  // 源节点如果含图片，把 dataURL 一起带去（视觉模型可识别）
+  const images = [];
+  if (src.kind === 'img' && src.src) images.push(src.src);
+  DBG.log('输入文档长度 =', doc.length, '前50字 =', JSON.stringify(doc.slice(0, 50)),
+          '| 图片数 =', images.length);
+  // 源节点既无文字也无图片 → 没东西可处理
+  if (!doc && images.length === 0) {
+    DBG.warn('源节点既无文字也无图片，跳过');
+    flashEdge(edge, 'skip');
+    return;
+  }
 
   const key = document.getElementById('apiKey').value.trim()
     || localStorage.getItem('deepseek_key') || '';
@@ -595,21 +786,22 @@ async function runEdge(edgeId) {
   dst.textEl.classList.remove('empty');
   edge.running = true;
   redrawEdges();
-  const outText = await streamLLM({ key, promptText, doc, onDelta: (t) => setOutput(dst, t) });
+  const outText = await streamLLM({ key, promptText, doc, images, onDelta: (t) => setOutput(dst, t) });
   edge.running = false;
   redrawEdges();
   DBG.log('========== runEdge', edgeId, '结束，输出', outText.length, '字符 ==========');
 }
 
 function setOutput(node, text) {
+  node.text = text;
   if (node.kind === 'output') {
     node.textEl.textContent = text;
     node.el.querySelector('.out').classList.toggle('empty', !text);
-  } else {
+  } else if (node.kind === 'doc') {
     // 目标是文档节点：直接覆盖文本
     node.textEl.value = text;
   }
-  node.text = text;
+  // 图片节点：不支持写入文本，忽略
 }
 
 function flashEdge(edge, type) {
@@ -624,31 +816,45 @@ function flashEdge(edge, type) {
 // =========================================================================
 // 10. LLM 流式请求
 // =========================================================================
-function buildPayload(promptText, doc) {
+// 构造请求体：支持「纯文本」与「文本 + 图片」两种模式
+// images: dataURL 数组（如 "data:image/png;base64,..."）
+function buildPayload(promptText, doc, images = []) {
+  const systemText =
+    '你是文本/图像处理引擎。用户会给你【文档】（可能包含文字和图片），' +
+    '你必须严格按照【命令】处理它。\n' +
+    '若输入包含图片，请直接识别图片内容后按命令处理（不要说你无法看到图片）。\n' +
+    '只输出处理结果本身，不要复述命令，不要添加解释、前言或后记。\n\n' +
+    '【命令】：' + (promptText || '处理下面的内容');
+
+  // 有图片 → 用多模态 content 数组；否则用普通字符串（保持向后兼容）
+  let userContent;
+  if (images.length) {
+    userContent = [
+      { type: 'text', text: '【文档】开始\n' + (doc || '（无文字，只有图片）') + '\n【文档】结束\n\n请执行【命令】，只输出结果。' },
+      ...images.map(url => ({ type: 'image_url', image_url: { url } })),
+    ];
+  } else {
+    userContent = '【文档】开始\n' + (doc || '') + '\n【文档】结束\n\n请执行【命令】，只输出结果。';
+  }
+
   return {
-    model: 'deepseek-chat',
+    model: 'deepseek-chat',   // 注：当前会路由到 deepseek-flash（支持图片）
     stream: true,
     temperature: 0.3,
     messages: [
-      {
-        role: 'system',
-        content:
-          '你是文本处理引擎。用户会给你一段【文档】，你必须严格按照【命令】处理它。\n' +
-          '只输出处理结果本身，不要复述命令，不要添加解释、前言或后记。\n' +
-          '【命令】可能不完整，请按其字面意图执行。\n\n' +
-          '【命令】：' + (promptText || '处理下面的内容'),
-      },
-      {
-        role: 'user',
-        content: '【文档】开始\n' + doc + '\n【文档】结束\n\n请执行【命令】，只输出结果。',
-      },
+      { role: 'system', content: systemText },
+      { role: 'user', content: userContent },
     ],
   };
 }
 
-async function streamLLM({ key, promptText, doc, onDelta }) {
-  DBG.lastRequest = buildPayload(promptText, doc);
-  DBG.log('发起请求 ->', API_URL, '\n请求体 =', DBG.lastRequest);
+async function streamLLM({ key, promptText, doc, images = [], onDelta }) {
+  DBG.lastRequest = buildPayload(promptText, doc, images);
+  // 图片 dataURL 很长，调试打印时用摘要代替，避免刷屏
+  const summary = JSON.parse(JSON.stringify(DBG.lastRequest, (k, v) =>
+    (k === 'url' && typeof v === 'string' && v.startsWith('data:'))
+      ? `[dataURL ${Math.round(v.length / 1024)}KB]` : v));
+  DBG.log('发起请求 ->', API_URL, '\n请求体(摘要) =', summary);
 
   let full = '';
   try {
@@ -730,6 +936,98 @@ document.addEventListener('keydown', (e) => {
 });
 
 // =========================================================================
+// 11.5 小地图（全局总览）
+// =========================================================================
+function contentBounds() {
+  const nodes = Object.values(state.nodes);
+  if (!nodes.length) return { minX: 0, minY: 0, maxX: 800, maxY: 600 };
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  for (const n of nodes) {
+    minX = Math.min(minX, n.x); minY = Math.min(minY, n.y);
+    maxX = Math.max(maxX, n.x + n.w); maxY = Math.max(maxY, n.y + n.h);
+  }
+  return { minX, minY, maxX, maxY };
+}
+
+// 小地图坐标换算（在 contentBounds 基础上加 padding）
+function miniTransform() {
+  const b = contentBounds();
+  const pad = 80;
+  const x0 = b.minX - pad, y0 = b.minY - pad;
+  const w  = (b.maxX - b.minX) + pad * 2;
+  const h  = (b.maxY - b.minY) + pad * 2;
+  const cv = document.querySelector('#minimap canvas');
+  const cw = cv.clientWidth, ch = cv.clientHeight;
+  const s = Math.min(cw / w, ch / h);
+  const ox = (cw - w * s) / 2, oy = (ch - h * s) / 2;
+  return { x0, y0, s, ox, oy };
+}
+
+function drawMiniMap() {
+  const map = document.getElementById('minimap');
+  if (map.classList.contains('hidden')) return;
+  const cv = map.querySelector('canvas');
+  const dpr = window.devicePixelRatio || 1;
+  const cw = cv.clientWidth, ch = cv.clientHeight;
+  if (cv.width !== cw * dpr) { cv.width = cw * dpr; cv.height = ch * dpr; }
+  const ctx = cv.getContext('2d');
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, cw, ch);
+
+  const { x0, y0, s, ox, oy } = miniTransform();
+  const W = (wx) => (wx - x0) * s + ox;
+  const H = (wy) => (wy - y0) * s + oy;
+
+  // 连线
+  ctx.strokeStyle = '#c7cad0'; ctx.lineWidth = 1;
+  for (const e of Object.values(state.edges)) {
+    const a = state.nodes[e.source], b = state.nodes[e.target];
+    if (!a || !b) continue;
+    ctx.beginPath();
+    ctx.moveTo(W(a.x + a.w), H(a.y + a.h / 2));
+    ctx.lineTo(W(b.x), H(b.y + b.h / 2));
+    ctx.stroke();
+  }
+
+  // 节点
+  const colors = { doc: '#16a34a', output: '#eab308', img: '#0ea5e9' };
+  for (const n of Object.values(state.nodes)) {
+    ctx.fillStyle = (colors[n.kind] || '#999') + '33';
+    ctx.strokeStyle = colors[n.kind] || '#999';
+    ctx.lineWidth = 1.5;
+    const rx = W(n.x), ry = H(n.y), rw = n.w * s, rh = n.h * s;
+    ctx.beginPath();
+    if (ctx.roundRect) ctx.roundRect(rx, ry, rw, rh, 2); else ctx.rect(rx, ry, rw, rh);
+    ctx.fill(); ctx.stroke();
+  }
+
+  // 当前视口矩形
+  const r = canvasEl().getBoundingClientRect();
+  const tl = screenToWorld(r.left, r.top);
+  const vx = W(tl.x), vy = H(tl.y), vw = (r.width / view.scale) * s, vh = (r.height / view.scale) * s;
+  ctx.strokeStyle = '#4f46e5'; ctx.lineWidth = 1.5;
+  ctx.fillStyle = 'rgba(79,70,229,.08)';
+  ctx.beginPath(); ctx.rect(vx, vy, vw, vh); ctx.fill(); ctx.stroke();
+}
+
+// 点击小地图跳转视口
+function bindMiniMapClick() {
+  const map = document.getElementById('minimap');
+  map.addEventListener('mousedown', (e) => {
+    const cv = map.querySelector('canvas');
+    const r = cv.getBoundingClientRect();
+    const px = e.clientX - r.left, py = e.clientY - r.top;
+    const { x0, y0, s, ox, oy } = miniTransform();
+    const wx = (px - ox) / s + x0;
+    const wy = (py - oy) / s + y0;
+    const cr = canvasEl().getBoundingClientRect();
+    view.x = cr.width  / 2 - wx * view.scale;
+    view.y = cr.height / 2 - wy * view.scale;
+    applyView();
+  });
+}
+
+// =========================================================================
 // 12. 初始化
 // =========================================================================
 function init() {
@@ -744,11 +1042,60 @@ function init() {
     createNode('doc', { x: 120, y: 120, text: '在这里输入要处理的文档…' }));
   document.getElementById('addOutput').addEventListener('click', () =>
     createNode('output', { x: 560, y: 120 }));
+  document.getElementById('addImg').addEventListener('click', () =>
+    createNode('img', { x: 560, y: 340 }));
   document.getElementById('runAll').addEventListener('click', runAll);
 
+  // ---- 视口控件 ----
+  document.getElementById('zoomIn').addEventListener('click', () => {
+    const r = canvasEl().getBoundingClientRect();
+    zoomAt(r.left + r.width / 2, r.top + r.height / 2, 1.2);
+  });
+  document.getElementById('zoomOut').addEventListener('click', () => {
+    const r = canvasEl().getBoundingClientRect();
+    zoomAt(r.left + r.width / 2, r.top + r.height / 2, 1 / 1.2);
+  });
+  document.getElementById('fit').addEventListener('click', () => fitToContent());
+  document.getElementById('reset1').addEventListener('click', () => {
+    const r = canvasEl().getBoundingClientRect();
+    zoomAt(r.left + r.width / 2, r.top + r.height / 2, 1 / view.scale);
+  });
+  document.getElementById('toggleMap').addEventListener('click', () => {
+    document.getElementById('minimap').classList.toggle('hidden');
+    drawMiniMap();
+  });
+  bindMiniMapClick();
+
+  // ---- 画布平移：空白处拖拽 或 空格+拖拽 ----
+  const canvas = document.getElementById('canvas');
+  let spaceDown = false;
+  document.addEventListener('keydown', (e) => { if (e.code === 'Space') spaceDown = true; });
+  document.addEventListener('keyup',   (e) => { if (e.code === 'Space') spaceDown = false; });
+  canvas.addEventListener('mousedown', (e) => {
+    const onBlank = e.target.id === 'canvas' || e.target.id === 'world' || e.target.id === 'edges';
+    if (!onBlank && !spaceDown) return;
+    if (e.button !== 0) return;
+    const sx = e.clientX, sy = e.clientY, ox = view.x, oy = view.y;
+    canvas.classList.add('panning');
+    function onMove(ev) { view.x = ox + (ev.clientX - sx); view.y = oy + (ev.clientY - sy); applyView(); }
+    function onUp() {
+      canvas.classList.remove('panning');
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onUp);
+    }
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+  });
+
+  // ---- 滚轮缩放 ----
+  canvas.addEventListener('wheel', (e) => {
+    e.preventDefault();
+    zoomAt(e.clientX, e.clientY, e.deltaY < 0 ? 1.1 : 1 / 1.1);
+  }, { passive: false });
+
   // 点击空白处取消选中
-  document.getElementById('canvas').addEventListener('mousedown', (e) => {
-    if (e.target.id === 'canvas' || e.target.id === 'edges') {
+  canvas.addEventListener('mousedown', (e) => {
+    if (e.target.id === 'canvas' || e.target.id === 'world' || e.target.id === 'edges') {
       state.selectedEdgeId = null;
       Object.values(state.nodes).forEach(n => n.el.classList.remove('selected'));
       redrawEdges();
@@ -765,8 +1112,12 @@ function init() {
   e1.command = '🖐️总结';
   layoutEdgeLabel(e1);
 
-  window.addEventListener('resize', redrawEdges);
-  DBG.log('初始化完成。快捷键：Alt+Enter 运行选中/悬停连线；Delete 删除选中连线。');
+  // 初始视图：适应全部内容，一眼看到整张图
+  applyView();
+  fitToContent();
+
+  window.addEventListener('resize', () => { redrawEdges(); drawMiniMap(); });
+  DBG.log('初始化完成。Alt+Enter 运行；滚轮缩放；空白处拖拽平移；右下角小地图总览。');
 }
 
 init();
