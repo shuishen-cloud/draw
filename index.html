@@ -3,232 +3,627 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>MVP · 文档 → 命令连线 → 输出</title>
+<title>Canvas MVP · 节点 / 连线 / Alt+Enter 执行</title>
 <style>
   :root {
-    --bg: #f7f7f8;
+    --bg: #f6f7f9;
     --node-bg: #ffffff;
     --border: #d5d7db;
     --accent: #4f46e5;
     --line: #9aa0a6;
   }
   * { box-sizing: border-box; }
-  html, body { margin: 0; height: 100%; font-family: system-ui, -apple-system, "Segoe UI", "PingFang SC", sans-serif; }
-  body { background: var(--bg); overflow: hidden; }
+  html, body { margin: 0; height: 100%; overflow: hidden;
+    font-family: system-ui, -apple-system, "Segoe UI", "PingFang SC", sans-serif; }
+  body { background: var(--bg); }
 
-  #canvas { position: absolute; inset: 0; }
+  #canvas { position: absolute; inset: 0; overflow: hidden; }
 
-  /* SVG 连线层 */
-  svg#edges { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
-  svg#edges path { fill: none; stroke: var(--line); stroke-width: 2.5; pointer-events: stroke; cursor: pointer; }
-  svg#edges path:hover { stroke: var(--accent); }
-  svg#edges path.executable { stroke: var(--accent); stroke-width: 3.5; }
-  svg#edges text { font-size: 13px; fill: #444; cursor: pointer; pointer-events: all; user-select: none; }
-  svg#edges text:hover { fill: var(--accent); }
+  /* ---------- 连线 SVG 层 ---------- */
+  svg#edges { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 1; }
+  svg#edges .wire { fill: none; stroke: var(--line); stroke-width: 2.5; pointer-events: stroke; cursor: pointer; }
+  svg#edges .wire:hover { stroke: #6b7280; }
+  svg#edges .wire.executable { stroke: var(--accent); stroke-width: 3.5; }
+  svg#edges .wire.running { stroke: #f59e0b; stroke-dasharray: 6 5; animation: dash .6s linear infinite; }
+  @keyframes dash { to { stroke-dashoffset: -11; } }
+  /* 临时拖拽预览线 */
+  svg#edges .ghost { stroke: var(--accent); stroke-width: 2; stroke-dasharray: 5 5; }
 
-  /* 节点 */
-  .node {
-    position: absolute;
-    width: 300px;
-    min-height: 140px;
-    background: var(--node-bg);
-    border: 1.5px solid var(--border);
-    border-radius: 10px;
-    box-shadow: 0 2px 10px rgba(0,0,0,.06);
-    display: flex;
-    flex-direction: column;
-    overflow: hidden;
+  /* 连线上的命令标签 —— 直接就地编辑 */
+  .edge-label {
+    position: absolute; z-index: 3;
+    transform: translate(-50%, -50%);
+    background: #fff; border: 1px solid var(--border); border-radius: 6px;
+    padding: 2px 7px; font-size: 12.5px; color: #444; white-space: nowrap;
+    cursor: text; user-select: none;
+    box-shadow: 0 1px 4px rgba(0,0,0,.08);
   }
+  .edge-label:hover { border-color: var(--accent); color: var(--accent); }
+  .edge-label.executable { border-color: var(--accent); color: var(--accent); font-weight: 600; }
+  .edge-label.placeholder { color: #b7bbc2; font-style: italic; }
+  /* 编辑态：变成一个真正的输入框 */
+  .edge-input {
+    position: absolute; z-index: 10;
+    transform: translate(-50%, -50%);
+    border: 1.5px solid var(--accent); border-radius: 6px;
+    padding: 2px 7px; font-size: 12.5px; outline: none;
+    box-shadow: 0 2px 10px rgba(79,70,229,.25);
+    min-width: 90px; text-align: center;
+  }
+
+  /* ---------- 节点 ---------- */
+  .node {
+    position: absolute; z-index: 2;
+    display: flex; flex-direction: column;
+    background: var(--node-bg);
+    border: 1.5px solid var(--border); border-radius: 10px;
+    box-shadow: 0 2px 10px rgba(0,0,0,.06);
+    min-width: 120px; min-height: 80px;
+    overflow: visible;
+  }
+  .node.selected { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(79,70,229,.15), 0 2px 10px rgba(0,0,0,.06); }
   .node .bar {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 6px 10px;
-    font-size: 12px;
-    font-weight: 600;
-    color: #555;
-    background: #f0f1f3;
-    cursor: grab;
-    user-select: none;
+    display: flex; align-items: center; gap: 6px;
+    padding: 5px 8px; font-size: 12px; font-weight: 600; color: #555;
+    background: #f0f1f3; border-radius: 8px 8px 0 0;
+    cursor: grab; user-select: none;
   }
   .node .bar:active { cursor: grabbing; }
-  .node .dot { width: 9px; height: 9px; border-radius: 50%; background: #c3c6cb; }
-  .node[data-type="doc"] .dot { background: #16a34a; }
-  .node[data-type="output"] .dot { background: #eab308; }
-
-  .node textarea, .node .out {
-    flex: 1;
-    border: 0;
-    outline: none;
-    resize: none;
-    padding: 10px;
-    font-size: 13.5px;
-    line-height: 1.6;
-    font-family: inherit;
-    background: transparent;
-    color: #222;
+  .node .dot { width: 9px; height: 9px; border-radius: 50%; background: #c3c6cb; flex: none; }
+  .node[data-kind="doc"]    .dot { background: #16a34a; }
+  .node[data-kind="output"] .dot { background: #eab308; }
+  .node .title { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .node .close {
+    flex: none; width: 18px; height: 18px; line-height: 16px; text-align: center;
+    border-radius: 4px; color: #999; cursor: pointer; font-weight: 700;
   }
-  .node textarea { font-family: ui-monospace, Menlo, Consolas, monospace; }
-  .node .out { white-space: pre-wrap; overflow-y: auto; }
+  .node .close:hover { background: #e5e7eb; color: #dc2626; }
+
+  .node .body { flex: 1; display: flex; min-height: 0; }
+  .node textarea, .node .out {
+    flex: 1; width: 100%; border: 0; outline: none; resize: none;
+    padding: 9px; font-size: 13.5px; line-height: 1.6;
+    font-family: ui-monospace, Menlo, Consolas, monospace;
+    background: transparent; color: #222;
+  }
+  .node .out { font-family: inherit; white-space: pre-wrap; overflow-y: auto; }
   .node .out.empty::before { content: "（执行结果会出现在这里）"; color: #b3b6bb; }
 
-  /* 悬浮工具 */
+  /* ---------- 端口（连线锚点）---------- */
+  .port {
+    position: absolute; width: 14px; height: 14px; border-radius: 50%;
+    background: #fff; border: 2px solid var(--accent);
+    top: 50%; transform: translateY(-50%);
+    cursor: crosshair; z-index: 4;
+  }
+  .port:hover { background: var(--accent); transform: translateY(-50%) scale(1.25); }
+  .port.in  { left: -8px; }
+  .port.out { right: -8px; }
+
+  /* 右下角缩放手柄 */
+  .resize-handle {
+    position: absolute; right: -3px; bottom: -3px; width: 14px; height: 14px;
+    cursor: nwse-resize; z-index: 4;
+    background: linear-gradient(135deg, transparent 50%, var(--border) 50%);
+    border-radius: 0 0 8px 0;
+  }
+  .resize-handle:hover { background: linear-gradient(135deg, transparent 50%, var(--accent) 50%); }
+
+  /* ---------- 工具栏 ---------- */
   #toolbar {
-    position: fixed;
-    left: 16px; bottom: 16px;
-    display: flex; gap: 8px; align-items: center;
-    background: #fff; padding: 8px 10px; border-radius: 10px;
-    box-shadow: 0 2px 12px rgba(0,0,0,.1);
-    font-size: 13px;
+    position: fixed; left: 16px; bottom: 16px; z-index: 20;
+    display: flex; gap: 8px; align-items: center; flex-wrap: wrap;
+    background: #fff; padding: 8px 10px; border-radius: 12px;
+    box-shadow: 0 3px 16px rgba(0,0,0,.12); font-size: 13px; max-width: calc(100vw - 32px);
   }
   button {
-    border: 0; border-radius: 8px; padding: 8px 14px; font-size: 13px;
+    border: 0; border-radius: 8px; padding: 7px 13px; font-size: 13px;
     background: var(--accent); color: #fff; cursor: pointer; font-weight: 600;
   }
   button:disabled { background: #b9bbc3; cursor: not-allowed; }
   button.ghost { background: #eef0f3; color: #333; }
-  #hint { color: #777; font-size: 12px; }
+  button.ghost:hover { background: #e2e5ea; }
+  input.key {
+    padding: 7px 9px; border: 1px solid #d5d7db; border-radius: 8px;
+    font-size: 13px; width: 230px;
+  }
+  #hint { color: #777; font-size: 12px; line-height: 1.5; }
+  kbd {
+    background: #f0f1f3; border: 1px solid #d5d7db; border-bottom-width: 2px;
+    border-radius: 4px; padding: 0 5px; font-size: 11px; font-family: inherit;
+  }
 </style>
 </head>
 <body>
 
 <div id="canvas">
   <svg id="edges"></svg>
-
-  <div class="node" data-type="doc" id="node-a">
-    <div class="bar"><span>📄 文档</span><span class="dot"></span></div>
-    <textarea id="doc">人工智能正在改变世界。大语言模型可以写代码、做翻译、回答问题、总结长文。它们通过海量文本训练，学会了语言的统计规律。在实际应用中，人们常常需要把长文档压缩成要点，或者提炼出核心结论，以便快速阅读和决策。</textarea>
-  </div>
-
-  <div class="node" data-type="output" id="node-b">
-    <div class="bar"><span>🎯 输出</span><span class="dot"></span></div>
-    <div class="out empty" id="out"></div>
-  </div>
 </div>
 
 <div id="toolbar">
-  <input id="apiKey" type="password" placeholder="DeepSeek API Key" style="width:200px;padding:7px 9px;border:1px solid #d5d7db;border-radius:8px;font-size:13px" />
-  <button id="run">运行 ▶</button>
-  <button class="ghost" id="runAll">全部运行</button>
-  <span id="hint">双击连线编辑命令（🖐️ 前缀才会执行）</span>
+  <input id="apiKey" class="key" type="password" placeholder="DeepSeek API Key" />
+  <button class="ghost" id="addDoc">＋ 文档节点</button>
+  <button class="ghost" id="addOutput">＋ 输出节点</button>
+  <button id="runAll">全部运行 ▶</button>
+  <span id="hint">
+    连出线：拖节点右侧圆点 → 落到另一节点<br>
+    编辑命令：单击连线上的标签 ·
+    执行：<kbd>Alt</kbd>+<kbd>Enter</kbd>（悬停/选中连线时）
+  </span>
 </div>
 
 <script>
-// ====== 1. 数据模型 ======
-const state = {
-  nodes: {
-    a: { id: 'a', x: 80,  y: 120 },
-    b: { id: 'b', x: 620, y: 120 },
-  },
-  edge: {
-    id: 'e1',
-    source: 'a',
-    target: 'b',
-    command: '🖐️总结',  // 只有以 🖐️ 开头才会执行
-  },
-};
-
+// =========================================================================
+// 0. 全局状态
+// =========================================================================
 const PREFIX = '🖐️';
 const API_URL = 'https://api.deepseek.com/chat/completions';
 
-// ====== [调试开关] ======
-// 在浏览器控制台输入 DBG.on() 打开，DBG.off() 关闭。默认开启。
-// 想看脱敏的完整请求体：运行一次后在控制台输入 DBG.lastRequest
+let nodeSeq = 0, edgeSeq = 0;
+
+const state = {
+  nodes: {},   // id -> { id, kind, title, x, y, w, h, text }
+  edges: {},   // id -> { id, source, target, command }
+  selectedEdgeId: null,
+};
+
+// 当前正在拖拽的连线预览 { source, x1, y1, x2, y2 }
+let pendingLink = null;
+
+// =========================================================================
+// 1. 调试工具
+// =========================================================================
 const DBG = {
   enabled: true,
   lastRequest: null,
   on()  { this.enabled = true;  console.log('[DBG] 调试已开启'); },
   off() { this.enabled = false; console.log('[DBG] 调试已关闭'); },
-  log(...args) { if (this.enabled) console.log('%c[DBG]', 'color:#4f46e5;font-weight:bold', ...args); },
-  warn(...args) { if (this.enabled) console.warn('%c[DBG]', 'color:#d97706;font-weight:bold', ...args); },
-  err(...args) { console.error('%c[DBG]', 'color:#dc2626;font-weight:bold', ...args); },
+  log(...a)  { if (this.enabled) console.log('%c[DBG]', 'color:#4f46e5;font-weight:bold', ...a); },
+  warn(...a) { if (this.enabled) console.warn('%c[DBG]', 'color:#d97706;font-weight:bold', ...a); },
+  err(...a)  { console.error('%c[DBG]', 'color:#dc2626;font-weight:bold', ...a); },
 };
-window.DBG = DBG; // 暴露到全局，方便控制台调用
+window.DBG = DBG;
+window.state = state; // 方便控制台检查
 
-// ====== 2. 渲染节点位置 ======
-function renderNodes() {
-  for (const id of Object.keys(state.nodes)) {
-    const n = state.nodes[id];
-    const el = document.getElementById('node-' + id);
-    el.style.left = n.x + 'px';
-    el.style.top  = n.y + 'px';
+// =========================================================================
+// 2. 节点增删
+// =========================================================================
+function createNode(kind, opts = {}) {
+  const id = 'n' + (++nodeSeq);
+  const isOutput = kind === 'output';
+  const node = {
+    id,
+    kind,                                  // 'doc' | 'output'
+    title: opts.title || (isOutput ? '输出' : '文档'),
+    x: opts.x ?? (80 + (nodeSeq % 6) * 40),
+    y: opts.y ?? (80 + (nodeSeq % 6) * 40),
+    w: opts.w ?? 300,                      // 宽度可直接控制
+    h: opts.h ?? 160,                      // 高度可直接控制
+    text: opts.text ?? '',
+    el: null,
+  };
+  state.nodes[id] = node;
+  renderNode(node);                        // 创建 DOM
+  layoutNode(node);
+  DBG.log('创建节点', id, kind);
+  return node;
+}
+
+function removeNode(id) {
+  const node = state.nodes[id];
+  if (!node) return;
+  // 删除所有与之相连的边
+  Object.values(state.edges)
+    .filter(e => e.source === id || e.target === id)
+    .forEach(e => removeEdge(e.id));
+  node.el.remove();
+  delete state.nodes[id];
+  DBG.log('删除节点', id);
+}
+
+function removeEdge(id) {
+  const e = state.edges[id];
+  if (!e) return;
+  e.labelEl?.remove();
+  if (state.selectedEdgeId === id) state.selectedEdgeId = null;
+  delete state.edges[id];
+  DBG.log('删除连线', id);
+}
+
+// =========================================================================
+// 3. 节点 DOM 创建与布局
+// =========================================================================
+function renderNode(node) {
+  const el = document.createElement('div');
+  el.className = 'node';
+  el.id = 'node-' + node.id;
+  el.dataset.kind = node.kind;
+  el.innerHTML = `
+    <div class="bar">
+      <span class="dot"></span>
+      <span class="title"></span>
+      <span class="close" title="删除节点">×</span>
+    </div>
+    <div class="body"></div>
+    <div class="port in"  title="输入"></div>
+    <div class="port out" title="拖我连线"></div>
+    <div class="resize-handle" title="拖拽调整大小"></div>
+  `;
+  el.querySelector('.title').textContent = node.title;
+
+  const body = el.querySelector('.body');
+  if (node.kind === 'output') {
+    const out = document.createElement('div');
+    out.className = 'out empty';
+    out.contentEditable = 'true';           // 允许手动改
+    body.appendChild(out);
+    node.textEl = out;
+    out.addEventListener('input', () => {
+      node.text = out.textContent;
+      out.classList.toggle('empty', !node.text);
+    });
+  } else {
+    const ta = document.createElement('textarea');
+    ta.placeholder = '在这里输入文档内容…';
+    ta.value = node.text;
+    body.appendChild(ta);
+    node.textEl = ta;
+    ta.addEventListener('input', () => {
+      node.text = ta.value;
+      redrawEdges();                        // 内容变化可能改变节点尺寸，重画连线
+    });
+  }
+
+  // 移动 + 选中
+  const bar = el.querySelector('.bar');
+  bar.addEventListener('mousedown', (e) => {
+    if (e.target.classList.contains('close')) return;
+    selectNode(node.id);
+    startDrag(e, node);
+  });
+  el.addEventListener('mousedown', () => selectNode(node.id));
+
+  // 删除节点
+  el.querySelector('.close').addEventListener('click', (e) => {
+    e.stopPropagation();
+    removeNode(node.id);
+    redrawEdges();
+  });
+
+  // 尾部端口：从这里拖出连线
+  el.querySelector('.port.out').addEventListener('mousedown', (e) => {
+    e.stopPropagation(); e.preventDefault();
+    startLinkFrom(node, e);
+  });
+  // 头部端口：可在此结束连线（也支持直接落在节点上）
+  el.querySelector('.port.in').addEventListener('mouseup', (e) => {
+    e.stopPropagation();
+    finishLinkTo(node);
+  });
+  el.addEventListener('mouseup', () => finishLinkTo(node));
+
+  // 缩放手柄
+  el.querySelector('.resize-handle').addEventListener('mousedown', (e) => {
+    e.stopPropagation(); e.preventDefault();
+    startResize(e, node);
+  });
+
+  document.getElementById('canvas').appendChild(el);
+  node.el = el;
+}
+
+function layoutNode(node) {
+  const el = node.el;
+  if (!el) return;
+  el.style.left = node.x + 'px';
+  el.style.top = node.y + 'px';
+  el.style.width = node.w + 'px';
+  el.style.height = node.h + 'px';
+}
+
+function selectNode(id) {
+  Object.values(state.nodes).forEach(n => n.el.classList.toggle('selected', n.id === id));
+}
+
+// =========================================================================
+// 4. 拖拽移动
+// =========================================================================
+function startDrag(e, node) {
+  const startX = e.clientX, startY = e.clientY;
+  const origX = node.x, origY = node.y;
+  function onMove(ev) {
+    node.x = origX + (ev.clientX - startX);
+    node.y = origY + (ev.clientY - startY);
+    layoutNode(node);
+    redrawEdges();
+  }
+  function onUp() {
+    window.removeEventListener('mousemove', onMove);
+    window.removeEventListener('mouseup', onUp);
+  }
+  window.addEventListener('mousemove', onMove);
+  window.addEventListener('mouseup', onUp);
+}
+
+// =========================================================================
+// 5. 拖拽缩放
+// =========================================================================
+function startResize(e, node) {
+  const startX = e.clientX, startY = e.clientY;
+  const ow = node.w, oh = node.h;
+  function onMove(ev) {
+    node.w = Math.max(120, ow + (ev.clientX - startX));
+    node.h = Math.max(80,  oh + (ev.clientY - startY));
+    layoutNode(node);
+    redrawEdges();
+    layoutEdgeLabel(node);      // 若此节点是端点，标签位置也要更新
+  }
+  function onUp() {
+    window.removeEventListener('mousemove', onMove);
+    window.removeEventListener('mouseup', onUp);
+  }
+  window.addEventListener('mousemove', onMove);
+  window.addEventListener('mouseup', onUp);
+}
+
+// =========================================================================
+// 6. 连线：从端口拖出
+// =========================================================================
+function startLinkFrom(node, e) {
+  const r = node.el.getBoundingClientRect();
+  const c = document.getElementById('canvas').getBoundingClientRect();
+  pendingLink = {
+    source: node.id,
+    x1: r.right - c.left,
+    y1: r.top - c.top + r.height / 2,
+    x2: e.clientX - c.left,
+    y2: e.clientY - c.top,
+  };
+  function onMove(ev) {
+    if (!pendingLink) return;
+    pendingLink.x2 = ev.clientX - c.left;
+    pendingLink.y2 = ev.clientY - c.top;
+    drawGhost(pendingLink);
+  }
+  function onUp(ev) {
+    window.removeEventListener('mousemove', onMove);
+    window.removeEventListener('mouseup', onUp);
+    // 若松开时落在某个节点上，则正式建边
+    const target = findNodeAt(ev.clientX, ev.clientY);
+    pendingLink = null;
+    drawGhost(null);
+    if (target && target.id !== node.id) {
+      addEdge(node.id, target.id);
+    } else {
+      DBG.log('连线取消（未落在有效节点上）');
+    }
+  }
+  window.addEventListener('mousemove', onMove);
+  window.addEventListener('mouseup', onUp);
+}
+
+function finishLinkTo(node) {
+  // 由 pendingLink 的 mouseup 处理，这里作为兜底入口（端口松手）
+  // 实际逻辑在 startLinkFrom 的 onUp 中，通过坐标命中判断。
+  void node;
+}
+
+function findNodeAt(cx, cy) {
+  for (const n of Object.values(state.nodes)) {
+    const r = n.el.getBoundingClientRect();
+    if (cx >= r.left && cx <= r.right && cy >= r.top && cy <= r.bottom) return n;
+  }
+  return null;
+}
+
+function addEdge(source, target) {
+  // 允许重复连线（同一对节点可有多条不同命令的线）
+  const id = 'e' + (++edgeSeq);
+  const edge = { id, source, target, command: '', labelEl: null };
+  state.edges[id] = edge;
+  createEdgeLabel(edge);
+  redrawEdges();
+  DBG.log('创建连线', id, source, '->', target);
+  return edge;
+}
+
+// =========================================================================
+// 7. 连线渲染
+// =========================================================================
+function edgeGeometry(edge) {
+  const a = state.nodes[edge.source];
+  const b = state.nodes[edge.target];
+  if (!a || !b) return null;
+  const c = document.getElementById('canvas').getBoundingClientRect();
+  const ra = a.el.getBoundingClientRect();
+  const rb = b.el.getBoundingClientRect();
+  const x1 = ra.right - c.left, y1 = ra.top - c.top + ra.height / 2;
+  const x2 = rb.left  - c.left, y2 = rb.top - c.top + rb.height / 2;
+  return { x1, y1, x2, y2 };
+}
+
+function edgePath({ x1, y1, x2, y2 }) {
+  const mx = (x1 + x2) / 2;
+  return `M ${x1} ${y1} C ${mx} ${y1}, ${mx} ${y2}, ${x2} ${y2}`;
+}
+
+function redrawEdges() {
+  const svg = document.getElementById('edges');
+  svg.innerHTML = '';
+  for (const edge of Object.values(state.edges)) {
+    const g = edgeGeometry(edge);
+    if (!g) continue;
+    const executable = edge.command.trim().startsWith(PREFIX);
+    const p = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    p.setAttribute('d', edgePath(g));
+    p.setAttribute('class', 'wire'
+      + (executable ? ' executable' : '')
+      + (state.selectedEdgeId === edge.id ? ' selected' : '')
+      + (edge.running ? ' running' : ''));
+    p.dataset.edge = edge.id;
+    p.addEventListener('click', () => selectEdge(edge.id));
+    p.addEventListener('dblclick', () => editEdgeLabel(edge));
+    svg.appendChild(p);
+    edge.pathEl = p;
+    layoutEdgeLabel(edge);
   }
 }
 
-// ====== 3. 渲染连线（含命令标签）======
-function renderEdge() {
+function drawGhost(link) {
   const svg = document.getElementById('edges');
-  const a = document.getElementById('node-a').getBoundingClientRect();
-  const b = document.getElementById('node-b').getBoundingClientRect();
-  const canvasRect = document.getElementById('canvas').getBoundingClientRect();
-
-  // 起点：A 右边缘中点；终点：B 左边缘中点
-  const x1 = a.right - canvasRect.left, y1 = a.top - canvasRect.top + a.height / 2;
-  const x2 = b.left  - canvasRect.left, y2 = b.top - canvasRect.top + b.height / 2;
-  const mx = (x1 + x2) / 2;
-
-  const executable = state.edge.command.trim().startsWith(PREFIX);
-
-  // [调试点 1] 每次重绘连线时，确认当前边上的命令 & 是否被识别为可执行
-  DBG.log('renderEdge | 命令=', JSON.stringify(state.edge.command),
-          '| 可执行=', executable,
-          '(判断依据: 去掉首尾空格后是否以 "' + PREFIX + '" 开头)');
-
-  svg.innerHTML = `
-    <path d="M ${x1} ${y1} C ${mx} ${y1}, ${mx} ${y2}, ${x2} ${y2}"
-          class="${executable ? 'executable' : ''}" data-edge="e1" />
-    <text x="${mx}" y="${(y1 + y2) / 2 - 10}" text-anchor="middle"
-          data-edge="e1">${escapeHtml(state.edge.command || '(双击编辑命令)')}</text>
-  `;
+  let ghost = svg.querySelector('.ghost');
+  if (!link) { ghost?.remove(); return; }
+  if (!ghost) {
+    ghost = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    ghost.setAttribute('class', 'ghost');
+    svg.appendChild(ghost);
+  }
+  ghost.setAttribute('d', edgePath(link));
 }
 
-function escapeHtml(s) {
-  return s.replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+// =========================================================================
+// 8. 连线命令标签（就地编辑，不弹窗）
+// =========================================================================
+function createEdgeLabel(edge) {
+  const el = document.createElement('div');
+  el.className = 'edge-label placeholder';
+  el.textContent = '+ 命令';
+  document.getElementById('canvas').appendChild(el);
+  edge.labelEl = el;
+
+  el.addEventListener('click', (e) => { e.stopPropagation(); selectEdge(edge.id); });
+  el.addEventListener('dblclick', (e) => { e.stopPropagation(); editEdgeLabel(edge); });
 }
 
-// ====== 4. 拖拽节点 ======
-function makeDraggable(nodeId) {
-  const el = document.getElementById('node-' + nodeId);
-  const bar = el.querySelector('.bar');
-  let dx = 0, dy = 0, dragging = false;
-  bar.addEventListener('mousedown', (e) => {
-    dragging = true;
-    const r = el.getBoundingClientRect();
-    dx = e.clientX - r.left;
-    dy = e.clientY - r.top;
-    e.preventDefault();
+function layoutEdgeLabel(edge) {
+  if (!edge.labelEl) return;
+  const g = edgeGeometry(edge);
+  if (!g) return;
+  // edgeGeometry 已基于 canvas 坐标系（已减去 canvas 的 left/top），
+  // 标签又是绝对定位在 #canvas 内，所以直接用 mid 坐标即可。
+  const mx = (g.x1 + g.x2) / 2;
+  const my = (g.y1 + g.y2) / 2;
+  edge.labelEl.style.left = mx + 'px';
+  edge.labelEl.style.top = my + 'px';
+
+  const cmd = edge.command.trim();
+  const executable = cmd.startsWith(PREFIX);
+  if (cmd) {
+    edge.labelEl.textContent = cmd;
+    edge.labelEl.classList.remove('placeholder');
+  } else {
+    edge.labelEl.textContent = '+ 命令';
+    edge.labelEl.classList.add('placeholder');
+  }
+  edge.labelEl.classList.toggle('executable', executable);
+}
+
+function selectEdge(id) {
+  state.selectedEdgeId = id;
+  redrawEdges();
+  DBG.log('选中连线', id, '命令=', JSON.stringify(state.edges[id]?.command));
+}
+
+// 就地编辑：把标签替换成一个 input
+function editEdgeLabel(edge) {
+  if (edge._editing) return;
+  edge._editing = true;
+  const label = edge.labelEl;
+  const input = document.createElement('input');
+  input.className = 'edge-input';
+  input.value = edge.command;
+  input.placeholder = '🖐️总结';
+  input.style.left = label.style.left;
+  input.style.top = label.style.top;
+  label.style.visibility = 'hidden';
+  document.getElementById('canvas').appendChild(input);
+  input.focus();
+  input.select();
+
+  let done = false;
+  const commit = (save) => {
+    if (done) return;
+    done = true;
+    edge._editing = false;
+    if (save) {
+      edge.command = input.value;
+      DBG.log('命令更新:', JSON.stringify(edge.command),
+              '| 可执行=', edge.command.trim().startsWith(PREFIX));
+    }
+    input.remove();
+    label.style.visibility = 'visible';
+    redrawEdges();
+  };
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && !e.altKey) { e.preventDefault(); commit(true); }
+    else if (e.key === 'Escape') { e.preventDefault(); commit(false); }
+    // Alt+Enter 在编辑中：保存并立即执行
+    else if (e.key === 'Enter' && e.altKey) { e.preventDefault(); commit(true); runEdge(edge.id); }
   });
-  window.addEventListener('mousemove', (e) => {
-    if (!dragging) return;
-    state.nodes[nodeId].x = e.clientX - dx;
-    state.nodes[nodeId].y = e.clientY - dy;
-    renderNodes();
-    renderEdge();
-  });
-  window.addEventListener('mouseup', () => { dragging = false; });
+  input.addEventListener('blur', () => commit(true));
 }
 
-// ====== 5. 编辑边上命令（双击）======
-function bindEdgeEdit() {
-  const svg = document.getElementById('edges');
-  svg.addEventListener('dblclick', (e) => {
-    const t = e.target.closest('[data-edge]');
-    // [调试点 2] 双击是否命中连线元素；没命中就不会弹输入框
-    if (!t) { DBG.warn('dblclick 未命中连线元素 (data-edge)，未弹输入框'); return; }
-    DBG.log('dblclick 命中连线，准备编辑命令');
-    const cur = state.edge.command;
-    const next = prompt('输入命令（以 🖐️ 开头才会被执行）：', cur);
-    if (next === null) { DBG.log('用户取消编辑，命令不变'); return; }
-    state.edge.command = next;
-    // [调试点 3] 记录编辑前后的命令，确认新命令真的写入了 state
-    DBG.log('命令已更新: ', JSON.stringify(cur), '->', JSON.stringify(next));
-    renderEdge();
-  });
+// =========================================================================
+// 9. 执行核心
+// =========================================================================
+async function runEdge(edgeId) {
+  const edge = state.edges[edgeId];
+  if (!edge) { DBG.warn('runEdge: 连线不存在', edgeId); return; }
+
+  DBG.log('========== runEdge', edgeId, '开始 ==========');
+  const cmd = edge.command.trim();
+  DBG.log('命令 =', JSON.stringify(cmd));
+  if (!cmd.startsWith(PREFIX)) {
+    DBG.warn('命令未以 ' + PREFIX + ' 开头，跳过');
+    flashEdge(edge, 'skip');
+    return;
+  }
+  const promptText = cmd.slice(PREFIX.length).trim();
+  DBG.log('promptText =', JSON.stringify(promptText));
+
+  const src = state.nodes[edge.source];
+  const dst = state.nodes[edge.target];
+  if (!src || !dst) { DBG.err('端点节点不存在'); return; }
+  const doc = src.text || '';
+  DBG.log('输入文档长度 =', doc.length, '前50字 =', JSON.stringify(doc.slice(0, 50)));
+
+  const key = document.getElementById('apiKey').value.trim()
+    || localStorage.getItem('deepseek_key') || '';
+  if (!key) { alert('请先填写 DeepSeek API Key'); return; }
+
+  setOutput(dst, '');
+  dst.textEl.classList.remove('empty');
+  edge.running = true;
+  redrawEdges();
+  const outText = await streamLLM({ key, promptText, doc, onDelta: (t) => setOutput(dst, t) });
+  edge.running = false;
+  redrawEdges();
+  DBG.log('========== runEdge', edgeId, '结束，输出', outText.length, '字符 ==========');
 }
 
-// ====== [辅助] 构造请求体 ======
-// 专门抽成函数，保证「真实请求」和「调试打印的 DBG.lastRequest」是同一份数据，
-// 避免两边写不一致导致调试结果误导。
+function setOutput(node, text) {
+  if (node.kind === 'output') {
+    node.textEl.textContent = text;
+    node.el.querySelector('.out').classList.toggle('empty', !text);
+  } else {
+    // 目标是文档节点：直接覆盖文本
+    node.textEl.value = text;
+  }
+  node.text = text;
+}
+
+function flashEdge(edge, type) {
+  if (!edge.pathEl) return;
+  const old = edge.pathEl.getAttribute('stroke');
+  edge.pathEl.setAttribute('stroke', type === 'skip' ? '#dc2626' : '#16a34a');
+  edge.pathEl.setAttribute('stroke-width', '4');
+  setTimeout(() => redrawEdges(), 600);
+  void old;
+}
+
+// =========================================================================
+// 10. LLM 流式请求
+// =========================================================================
 function buildPayload(promptText, doc) {
   return {
     model: 'deepseek-chat',
@@ -251,67 +646,26 @@ function buildPayload(promptText, doc) {
   };
 }
 
-// ====== 6. 执行核心 ======
-async function runEdge() {
-  DBG.log('========== runEdge 开始 ==========');
-  const cmd = state.edge.command.trim();
-  // [调试点 4] 执行入口：确认读到的原始命令
-  DBG.log('读取命令 =', JSON.stringify(cmd));
-  if (!cmd.startsWith(PREFIX)) {
-    // [调试点 5] 最常见的"没反应"原因：命令没以 🖐️ 开头
-    DBG.warn('命令未以 ' + PREFIX + ' 开头，中止执行。请双击连线修改命令。');
-    alert('这条连线没有 🖐️ 前缀，不会执行。双击连线修改命令。');
-    return;
-  }
-  const promptText = cmd.slice(PREFIX.length).trim(); // "总结"
-  // [调试点 6] 真正作为 system prompt 的文本（PREFIX 之后的部分）
-  DBG.log('解析出命令文本 promptText =', JSON.stringify(promptText));
-  if (!promptText) DBG.warn('命令文本为空（只有 🖐️），将回退为默认提示');
-  const doc = document.getElementById('doc').value;
-  const outEl = document.getElementById('out');
-  const runBtn = document.getElementById('run');
-  // [调试点 7] 确认实际取到的文档内容
-  DBG.log('文档内容长度 =', doc.length, '字符，前 50 字 =', JSON.stringify(doc.slice(0, 50)));
+async function streamLLM({ key, promptText, doc, onDelta }) {
+  DBG.lastRequest = buildPayload(promptText, doc);
+  DBG.log('发起请求 ->', API_URL, '\n请求体 =', DBG.lastRequest);
 
-  const key = document.getElementById('apiKey').value.trim();
-  // [调试点 8] 确认 key 是否存在（不打印 key 本身，只打印长度）
-  DBG.log('API Key 长度 =', key.length);
-  if (!key) { alert('请先填写 DeepSeek API Key'); return; }
-
-  runBtn.disabled = true;
-  outEl.classList.remove('empty');
-  outEl.textContent = '思考中…';
-
+  let full = '';
   try {
     const res = await fetch(API_URL, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': 'Bearer ' + key,
-      },
-      body: JSON.stringify(
-        // [调试点 9] 请求体由 buildPayload 统一构造，下面打印的就是它
-        (DBG.lastRequest = buildPayload(promptText, doc))
-      ),
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + key },
+      body: JSON.stringify(DBG.lastRequest),
     });
-
-    // [调试点 9] 打印真实发出的请求体（已脱敏 key）。控制台随时输 DBG.lastRequest 回看
-    DBG.log('发起请求 ->', API_URL, '\n请求体 =', DBG.lastRequest);
-
     if (!res.ok) {
-      // [调试点 10] HTTP 层面失败（401=key错, 402=余额不足, 429=限流）
       const errText = await res.text();
-      DBG.err('HTTP 请求失败 status =', res.status, 'body =', errText);
-      throw new Error('HTTP ' + res.status + ' ' + errText);
+      DBG.err('HTTP 失败', res.status, errText);
+      onDelta('❌ HTTP ' + res.status + ' ' + errText);
+      return '';
     }
-
-    // 流式读取
     const reader = res.body.getReader();
     const decoder = new TextDecoder();
-    let buffer = '';
-    let chunkCount = 0;   // [调试]计数：收到多少个有内容的 SSE 数据块
-    let outText = '';      // [调试]累计输出，结束时一次性打印
-    outEl.textContent = '';
+    let buffer = '', chunkCount = 0;
     while (true) {
       const { done, value } = await reader.read();
       if (done) break;
@@ -326,38 +680,96 @@ async function runEdge() {
         try {
           const json = JSON.parse(payload);
           const delta = json.choices?.[0]?.delta?.content || '';
-          if (delta) chunkCount++;      // [调试] 只统计有内容的增量
-          outText += delta;
-          outEl.textContent += delta;
-        } catch (parseErr) {
-          // [调试点 11] SSE 单行解析失败（如果输出为空，这里很可能有报错）
-          DBG.warn('SSE 行解析失败:', JSON.stringify(s), parseErr.message);
-        }
+          if (delta) chunkCount++;
+          full += delta;
+          onDelta(full);
+        } catch (e) { DBG.warn('SSE 解析失败:', s, e.message); }
       }
     }
-    // [调试点 12] 流结束：确认到底收到了多少内容
-    DBG.log('流式结束 | 增量块数 =', chunkCount, '| 最终输出长度 =', outText.length);
-    if (!outText) DBG.warn('输出为空！请检查 DBG.lastRequest 与 HTTP 状态码');
+    DBG.log('流结束 | 块数 =', chunkCount, '| 长度 =', full.length);
   } catch (err) {
-    // [调试点 13] 任何异常（网络/跨域/解析）都会到这里
-    DBG.err('runEdge 异常:', err);
-    outEl.textContent = '❌ ' + err.message;
-  } finally {
-    runBtn.disabled = false;
-    DBG.log('========== runEdge 结束 ==========');
+    DBG.err('请求异常:', err);
+    onDelta('❌ ' + err.message);
   }
+  return full;
 }
 
-// ====== 7. 初始化 ======
-renderNodes();
-renderEdge();
-['a', 'b'].forEach(makeDraggable);
-bindEdgeEdit();
-document.getElementById('run').addEventListener('click', runEdge);
-document.getElementById('runAll').addEventListener('click', runEdge);
-window.addEventListener('resize', renderEdge);
-// 节点内容/尺寸变化时重画连线
-new ResizeObserver(renderEdge).observe(document.getElementById('node-b'));
+// =========================================================================
+// 11. 全局运行 / 快捷键
+// =========================================================================
+async function runAll() {
+  const list = Object.values(state.edges);
+  DBG.log('全部运行，共', list.length, '条连线');
+  for (const e of list) await runEdge(e.id);
+}
+
+// Alt+Enter：运行「当前选中的」或「鼠标悬停的」连线
+function runCurrentEdge() {
+  let id = state.selectedEdgeId;
+  if (!id) {
+    // 找鼠标下的连线
+    const hovered = document.querySelectorAll('#edges .wire:hover');
+    if (hovered.length) id = hovered[0].dataset.edge;
+  }
+  if (!id) { DBG.warn('没有选中/悬停任何连线'); return; }
+  runEdge(id);
+}
+
+document.addEventListener('keydown', (e) => {
+  if (e.altKey && e.key === 'Enter') {
+    e.preventDefault();
+    runCurrentEdge();
+  }
+  // Delete 删除选中连线
+  if ((e.key === 'Delete' || e.key === 'Backspace')
+      && state.selectedEdgeId
+      && document.activeElement === document.body) {
+    removeEdge(state.selectedEdgeId);
+    redrawEdges();
+  }
+});
+
+// =========================================================================
+// 12. 初始化
+// =========================================================================
+function init() {
+  // API Key 记忆
+  const savedKey = localStorage.getItem('deepseek_key');
+  if (savedKey) document.getElementById('apiKey').value = savedKey;
+  document.getElementById('apiKey').addEventListener('change', (e) => {
+    localStorage.setItem('deepseek_key', e.target.value.trim());
+  });
+
+  document.getElementById('addDoc').addEventListener('click', () =>
+    createNode('doc', { x: 120, y: 120, text: '在这里输入要处理的文档…' }));
+  document.getElementById('addOutput').addEventListener('click', () =>
+    createNode('output', { x: 560, y: 120 }));
+  document.getElementById('runAll').addEventListener('click', runAll);
+
+  // 点击空白处取消选中
+  document.getElementById('canvas').addEventListener('mousedown', (e) => {
+    if (e.target.id === 'canvas' || e.target.id === 'edges') {
+      state.selectedEdgeId = null;
+      Object.values(state.nodes).forEach(n => n.el.classList.remove('selected'));
+      redrawEdges();
+    }
+  });
+
+  // 示例：文档节点 + 输出节点 + 一条命令连线
+  const a = createNode('doc', { x: 100, y: 140, title: '文档',
+    text: '人工智能正在改变世界。大语言模型可以写代码、做翻译、回答问题、总结长文。' +
+          '它们通过海量文本训练，学会了语言的统计规律。在实际应用中，人们常常需要把长文档压缩成要点，' +
+          '或者提炼出核心结论，以便快速阅读和决策。' });
+  const b = createNode('output', { x: 620, y: 140, title: '输出' });
+  const e1 = addEdge(a.id, b.id);
+  e1.command = '🖐️总结';
+  layoutEdgeLabel(e1);
+
+  window.addEventListener('resize', redrawEdges);
+  DBG.log('初始化完成。快捷键：Alt+Enter 运行选中/悬停连线；Delete 删除选中连线。');
+}
+
+init();
 </script>
 </body>
 </html>
