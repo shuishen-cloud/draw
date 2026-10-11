@@ -23,6 +23,13 @@
   /* 布局：画布区 + 右侧侧边栏（flex） */
   #stage { position: absolute; inset: 0; display: flex; }
   #canvasWrap { position: relative; flex: 1 1 auto; min-width: 0; overflow: hidden; }
+  #canvasWrap.dropping::after {
+    content: '松开以导入文件'; position: absolute; inset: 12px; z-index: 40;
+    border: 3px dashed var(--accent); border-radius: 14px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 18px; font-weight: 700; color: var(--accent);
+    background: rgba(79,70,229,.06); pointer-events: none;
+  }
 
   /* ---------- 左侧大纲栏 ---------- */
   #outline {
@@ -39,6 +46,51 @@
   }
   .ol-head .spacer { flex: 1; }
   .ol-body { flex: 1; overflow-y: auto; padding: 8px; font-size: 12.5px; }
+
+  /* 左侧 Tab */
+  .ol-tabs {
+    display: flex; border-bottom: 1px solid #eceef1; flex: none;
+  }
+  .ol-tab {
+    flex: 1; text-align: center; padding: 9px 6px; font-size: 12.5px;
+    font-weight: 600; color: #777; cursor: pointer; user-select: none;
+    border-bottom: 2px solid transparent;
+  }
+  .ol-tab:hover { background: #f7f8fa; color: #333; }
+  .ol-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+  .ol-pane { flex: 1; display: flex; flex-direction: column; min-height: 0; }
+
+  /* 任务卡片 */
+  .task-card {
+    border: 1px solid #eceef1; border-radius: 8px; margin-bottom: 8px; overflow: hidden;
+  }
+  .task-card.active { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(79,70,229,.12); }
+  .task-head {
+    display: flex; align-items: center; gap: 6px; padding: 7px 8px;
+    background: #f7f8fa; cursor: pointer; font-weight: 600; color: #333;
+  }
+  .task-head:hover { background: #eef0f4; }
+  .task-head .tname { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .task-head .tcount { font-size: 11px; color: #999; }
+  .task-head .trun {
+    font-size: 11px; padding: 2px 8px; border-radius: 999px;
+    background: var(--accent); color: #fff; font-weight: 600;
+  }
+  .task-head .trun:hover { filter: brightness(1.1); }
+  .task-lines { padding: 5px 8px 8px; }
+  .task-line {
+    display: flex; align-items: center; gap: 5px; font-size: 11.5px;
+    color: #555; padding: 2px 0; cursor: pointer;
+  }
+  .task-line:hover { color: var(--accent); }
+  .task-line input { margin: 0; }
+  .task-empty { color: #b3b6bb; font-size: 12px; padding: 8px; font-style: italic; }
+  .task-actions { display: flex; gap: 6px; padding: 0 8px 8px; }
+  .task-actions button { padding: 3px 8px; font-size: 11px; background: #eef0f3; color: #444; }
+  .task-actions button:hover { background: #e2e5ea; }
+  .task-actions button.danger { color: #dc2626; }
+  /* 连线标签上的“属于任务”标记 */
+  .edge-label .task-dot { color: #f59e0b; margin-left: 4px; font-size: 10px; }
 
   /* 大纲条目 */
   .ol-zone { margin-bottom: 8px; border: 1px solid #eceef1; border-radius: 8px; overflow: hidden; }
@@ -75,7 +127,7 @@
   .lvl-btn.active { background: var(--accent); color: #fff; }
 
   #toggleOutline {
-    position: fixed; left: 16px; top: 16px; z-index: 31;
+    position: absolute; left: 16px; top: 16px; z-index: 31;
     padding: 7px 12px; background: #fff; color: #333;
     border: 1px solid var(--border); border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,.08);
   }
@@ -262,10 +314,10 @@
 
   /* ---------- 工具栏 ---------- */
   #toolbar {
-    position: fixed; left: 16px; bottom: 16px; z-index: 20;
+    position: absolute; left: 16px; bottom: 16px; z-index: 20;
     display: flex; gap: 8px; align-items: center; flex-wrap: wrap;
     background: #fff; padding: 8px 10px; border-radius: 12px;
-    box-shadow: 0 3px 16px rgba(0,0,0,.12); font-size: 13px; max-width: calc(100vw - 32px);
+    box-shadow: 0 3px 16px rgba(0,0,0,.12); font-size: 13px; max-width: calc(100% - 32px);
   }
   button {
     border: 0; border-radius: 8px; padding: 7px 13px; font-size: 13px;
@@ -286,7 +338,7 @@
 
   /* 右下角视图控件 */
   #viewctl {
-    position: fixed; right: 16px; bottom: 16px; z-index: 20;
+    position: absolute; right: 16px; bottom: 16px; z-index: 20;
     display: flex; gap: 6px; align-items: center;
     background: #fff; padding: 6px; border-radius: 10px;
     box-shadow: 0 3px 16px rgba(0,0,0,.12);
@@ -297,7 +349,7 @@
 
   /* 小地图 */
   #minimap {
-    position: fixed; right: 16px; bottom: 66px; z-index: 19;
+    position: absolute; right: 16px; bottom: 66px; z-index: 19;
     width: 220px; height: 150px;
     background: rgba(255,255,255,.92); border: 1px solid var(--border);
     border-radius: 10px; box-shadow: 0 3px 16px rgba(0,0,0,.12);
@@ -366,27 +418,50 @@
 
   /* 折叠/展开按钮 */
   #toggleSidebar {
-    position: fixed; right: 16px; top: 16px; z-index: 31;
+    position: absolute; right: 16px; top: 16px; z-index: 31;
     padding: 7px 12px; background: #fff; color: #333;
     border: 1px solid var(--border); border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,.08);
   }
   #toggleSidebar:hover { background: #f5f6f8; }
+
+  /* 轻提示 */
+  #toast {
+    position: absolute; left: 50%; top: 18px; transform: translateX(-50%);
+    z-index: 100; padding: 8px 16px; border-radius: 10px;
+    background: #111827; color: #fff; font-size: 13px; font-weight: 600;
+    box-shadow: 0 4px 16px rgba(0,0,0,.25); opacity: 0; transition: opacity .2s;
+    pointer-events: none;
+  }
+  #toast.show { opacity: .95; }
 </style>
 </head>
 <body>
 
 <div id="stage">
   <aside id="outline">
-    <div class="ol-head">
-      <span>📑 大纲</span>
-      <span class="spacer"></span>
-      <button class="ghost" id="addZone" style="padding:4px 8px;font-size:12px">＋区域</button>
+    <div class="ol-tabs">
+      <span class="ol-tab active" data-tab="outline">📑 大纲</span>
+      <span class="ol-tab" data-tab="tasks">⚡ 任务</span>
     </div>
-    <div id="levelFilter"></div>
-    <div class="ol-body" id="outlineBody"></div>
+    <div class="ol-pane" id="paneOutline">
+      <div class="ol-head">
+        <span class="spacer"></span>
+        <button class="ghost" id="addZone" style="padding:4px 8px;font-size:12px">＋区域</button>
+      </div>
+      <div id="levelFilter"></div>
+      <div class="ol-body" id="outlineBody"></div>
+    </div>
+    <div class="ol-pane" id="paneTasks" style="display:none">
+      <div class="ol-head">
+        <span class="spacer"></span>
+        <button class="ghost" id="addTask" style="padding:4px 8px;font-size:12px">＋新建任务</button>
+      </div>
+      <div class="ol-body" id="taskBody"></div>
+    </div>
   </aside>
 
   <div id="canvasWrap">
+    <div id="toast"></div>
     <div id="canvas">
       <div id="world">
         <svg id="edges"></svg>
@@ -407,12 +482,22 @@
       <button class="ghost" id="addOutput">＋ 输出节点</button>
       <button class="ghost" id="addImg">＋ 图片节点</button>
       <button class="ghost" id="addExec">＋ 执行节点</button>
+      <button class="ghost" id="importFiles">📂 导入文件</button>
+      <button class="ghost" id="importUrl">🔗 从链接导入</button>
+      <button class="ghost" id="saveCanvas">💾 保存</button>
+      <button class="ghost" id="exportJson">⬇ 导出</button>
+      <button class="ghost" id="importJson">⬆ 导入</button>
       <button id="runAll">全部运行 ▶</button>
+      <input type="file" id="filePicker" multiple style="display:none"
+             accept=".txt,.md,.markdown,.csv,.json,.log,.js,.ts,.py,.html,.css,.xml,.yaml,.yml,image/*" />
+      <input type="file" id="jsonPicker" accept=".json" style="display:none" />
       <span id="hint">
         连出线：拖节点右侧圆点 · 编辑命令：单击连线标签 · 执行：<kbd>Alt</kbd>+<kbd>Enter</kbd><br>
-        平移：空白处拖拽 · 缩放：<kbd>Ctrl</kbd>滚轮 · 右侧对话可读取整张画布
+        导入：按钮选择 / 拖文件到画布 · 平移：空白处拖拽 · 缩放：<kbd>Ctrl</kbd>滚轮
       </span>
     </div>
+    <button id="toggleOutline" title="展开/折叠大纲栏">📑 大纲</button>
+    <button id="toggleSidebar" title="展开/折叠对话栏">≡ 对话</button>
   </div>
 
   <aside id="sidebar">
@@ -441,9 +526,6 @@
   </aside>
 </div>
 
-<button id="toggleOutline" title="展开/折叠大纲栏">📑 大纲</button>
-<button id="toggleSidebar" title="展开/折叠对话栏">≡ 对话</button>
-
 <script>
 // =========================================================================
 // 0. 全局状态
@@ -463,6 +545,10 @@ const state = {
   selectedEdgeId: null,
   // 当前层级过滤：'all' 或某个 zoneId（只显示该区域及其节点）
   filterZoneId: 'all',
+  // 任务：命名的一组连线（边 id 集合），可单独运行
+  tasks: {},        // id -> { id, name, edgeIds: [] }
+  activeTaskId: null,
+  olTab: 'outline', // 左侧当前 Tab: 'outline' | 'tasks'
 };
 
 // 当前正在拖拽的连线预览 { source, x1, y1, x2, y2 }
@@ -566,9 +652,11 @@ function createZone(opts = {}) {
   state.zones[id] = zone;
   renderZone(zone);
   layoutZone(zone);
-  refreshAllZonePickers();    // 新区域要出现在所有节点的下拉里
-  refreshOutline();
-  window.scheduleSnapshot?.();
+  if (!window.__silentImport) {
+    refreshAllZonePickers();    // 新区域要出现在所有节点的下拉里
+    refreshOutline();
+    window.scheduleSnapshot?.();
+  }
   DBG.log('创建区域', id, zone.title);
   return zone;
 }
@@ -622,6 +710,7 @@ function renderZone(zone) {
     function onUp() {
       window.removeEventListener('mousemove', onMove2);
       window.removeEventListener('mouseup', onUp);
+      window.scheduleSnapshot?.();   // 区域拖动结束保存
     }
     window.addEventListener('mousemove', onMove2);
     window.addEventListener('mouseup', onUp);
@@ -644,6 +733,7 @@ function renderZone(zone) {
     function onUp() {
       window.removeEventListener('mousemove', onMove);
       window.removeEventListener('mouseup', onUp);
+      window.scheduleSnapshot?.();   // 区域缩放结束保存
     }
     window.addEventListener('mousemove', onMove);
     window.addEventListener('mouseup', onUp);
@@ -835,9 +925,9 @@ function createNode(kind, opts = {}) {
   state.nodes[id] = node;
   renderNode(node);                        // 创建 DOM
   layoutNode(node);
-  refreshOutline();
+  if (!window.__silentImport) refreshOutline();
   DBG.log('创建节点', id, kind, 'zone=', node.zoneId);
-  window.scheduleSnapshot?.();
+  if (!window.__silentImport) window.scheduleSnapshot?.();
   return node;
 }
 
@@ -1087,6 +1177,7 @@ function startDrag(e, node) {
   function onUp() {
     window.removeEventListener('mousemove', onMove);
     window.removeEventListener('mouseup', onUp);
+    window.scheduleSnapshot?.();   // 拖动结束保存位置
   }
   window.addEventListener('mousemove', onMove);
   window.addEventListener('mouseup', onUp);
@@ -1109,6 +1200,7 @@ function startResize(e, node) {
   function onUp() {
     window.removeEventListener('mousemove', onMove);
     window.removeEventListener('mouseup', onUp);
+    window.scheduleSnapshot?.();   // 缩放结束保存尺寸
   }
   window.addEventListener('mousemove', onMove);
   window.addEventListener('mouseup', onUp);
@@ -1169,9 +1261,9 @@ function addEdge(source, target) {
   const edge = { id, source, target, command: '', labelEl: null };
   state.edges[id] = edge;
   createEdgeLabel(edge);
-  redrawEdges();
+  if (!window.__silentImport) redrawEdges();
   DBG.log('创建连线', id, source, '->', target);
-  window.scheduleSnapshot?.();
+  if (!window.__silentImport) window.scheduleSnapshot?.();
   return edge;
 }
 
@@ -1255,20 +1347,35 @@ function layoutEdgeLabel(edge) {
 
   const cmd = edge.command.trim();
   const executable = cmd.startsWith(PREFIX);
+  let text;
   if (cmd) {
-    edge.labelEl.textContent = cmd;
+    text = escapeHtml(cmd);
     edge.labelEl.classList.remove('placeholder');
   } else {
-    edge.labelEl.textContent = '+ 命令';
+    text = '+ 命令';
     edge.labelEl.classList.add('placeholder');
   }
+  // 若属于当前激活任务，加个小标记
+  if (edgeInActiveTask(edge.id)) text += '<span class="task-dot" title="属于当前任务">●</span>';
+  edge.labelEl.innerHTML = text;
   edge.labelEl.classList.toggle('executable', executable);
 }
 
 function selectEdge(id) {
+  // 若当前正在“任务”Tab 且已选中一个任务，则点击连线 = 切换它是否属于该任务
+  if (state.olTab === 'tasks' && state.activeTaskId && state.tasks[state.activeTaskId]) {
+    toggleEdgeInTask(state.activeTaskId, id);
+    DBG.log('切换连线', id, '在任务', state.activeTaskId, '中的归属');
+  }
   state.selectedEdgeId = id;
   redrawEdges();
   DBG.log('选中连线', id, '命令=', JSON.stringify(state.edges[id]?.command));
+}
+
+// 某条线是否属于当前激活任务
+function edgeInActiveTask(edgeId) {
+  const t = state.tasks[state.activeTaskId];
+  return !!(t && t.edgeIds.includes(edgeId));
 }
 
 // 就地编辑：把标签替换成一个 input
@@ -1368,6 +1475,12 @@ function setOutput(node, text) {
   } else if (node.kind === 'doc') {
     // 目标是文档节点：直接覆盖文本
     node.textEl.value = text;
+  } else if (node.kind === 'exec') {
+    // 目标是执行节点：写入其结果区（使得一个执行节点的输出可被下游继续使用）
+    if (node.textEl) {
+      node.textEl.textContent = text;
+      node.textEl.classList.toggle('empty', !text);
+    }
   }
   // 图片节点：不支持写入文本，忽略
 }
@@ -1525,11 +1638,13 @@ async function runExecNode(nodeId) {
 }
 
 async function runAll() {
-  const edges = Object.values(state.edges);
-  const execs = Object.values(state.nodes).filter(n => n.kind === 'exec');
-  DBG.log('全部运行：连线', edges.length, '条，执行节点', execs.length, '个');
-  for (const e of edges) await runEdge(e.id);
-  // 最后跑所有执行节点（它们依赖上游结果）
+  // 按拓扑依赖顺序运行所有连线，保证链式（如 exec A → exec B）顺序正确
+  const ordered = topoSortEdges(Object.keys(state.edges));
+  const execs = Object.values(state.nodes).filter(n => n.kind === 'exec')
+    .sort((a, b) => depthOf(a.id) - depthOf(b.id));
+  DBG.log('全部运行：连线', ordered.length, '条，执行节点', execs.length, '个（已按依赖排序）');
+  for (const e of ordered) await runEdge(e.id);
+  // 最后按拓扑顺序跑执行节点（汇总上游结果）
   for (const n of execs) await runExecNode(n.id);
 }
 
@@ -1880,6 +1995,510 @@ function bindSidebar() {
 }
 
 // =========================================================================
+// 11.95 引入本地资料：文件导入 / URL 抓取 / 拖放到画布
+// =========================================================================
+const TEXT_EXT = ['txt','md','markdown','csv','json','log','js','ts','jsx','tsx','py',
+  'html','css','xml','yaml','yml','ini','conf','sh','java','go','rs','c','cpp','sql'];
+
+// 找到一块空位，避免新节点重叠
+function findFreeSpot(w = 300, h = 180) {
+  const nodes = Object.values(state.nodes);
+  if (!nodes.length) return { x: 160, y: 160 };
+  // 取最右节点的右侧
+  let maxRight = -Infinity, topY = 0;
+  for (const n of nodes) {
+    if (n.x + n.w > maxRight) { maxRight = n.x + n.w; topY = n.y; }
+  }
+  return { x: maxRight + 60, y: topY };
+}
+
+// 依据文件类型创建节点
+async function importFile(file) {
+  const ext = (file.name.split('.').pop() || '').toLowerCase();
+  const spot = findFreeSpot();
+
+  if (file.type.startsWith('image/')) {
+    const dataUrl = await readAsDataURL(file);
+    const node = createNode('img', { x: spot.x, y: spot.y, title: file.name, src: dataUrl });
+    return node;
+  }
+
+  if (TEXT_EXT.includes(ext) || file.type.startsWith('text/')) {
+    const text = await readAsText(file);
+    const node = createNode('doc', {
+      x: spot.x, y: spot.y, title: file.name,
+      text: text.slice(0, 100000),   // 限制单节点长度
+    });
+    DBG.log('导入文本文件', file.name, text.length, '字');
+    return node;
+  }
+
+  // 其他类型：尝试当文本读
+  try {
+    const text = await readAsText(file);
+    return createNode('doc', { x: spot.x, y: spot.y, title: file.name, text: text.slice(0, 100000) });
+  } catch {
+    alert(`不支持的文件类型：${file.name}`);
+    return null;
+  }
+}
+
+function readAsText(file) {
+  return new Promise((res, rej) => {
+    const r = new FileReader();
+    r.onload = () => res(r.result);
+    r.onerror = () => rej(r.error);
+    r.readAsText(file);
+  });
+}
+function readAsDataURL(file) {
+  return new Promise((res, rej) => {
+    const r = new FileReader();
+    r.onload = () => res(r.result);
+    r.onerror = () => rej(r.error);
+    r.readAsDataURL(file);
+  });
+}
+
+// 批量导入
+async function importFiles(files) {
+  const list = [...files];
+  DBG.log('开始导入', list.length, '个文件');
+  for (const f of list) {
+    try { await importFile(f); }
+    catch (e) { DBG.err('导入失败', f.name, e); }
+  }
+  redrawEdges();
+  fitToContent();
+  refreshOutline();
+  window.scheduleSnapshot?.();
+  DBG.log('导入完成');
+}
+
+// 从 URL 抓取
+async function importFromUrl(url) {
+  if (!url) url = prompt('输入要引入的网页地址：', 'https://');
+  if (!url || !/^https?:\/\//.test(url)) return;
+  DBG.log('抓取 URL', url);
+  const spot = findFreeSpot();
+  const node = createNode('doc', { x: spot.x, y: spot.y, title: '加载中…', text: '正在抓取 ' + url + ' …' });
+  try {
+    const res = await fetch('/proxy?url=' + encodeURIComponent(url));
+    const data = await res.json();
+    if (data.error) throw new Error(data.error);
+    node.title = (data.title || url).slice(0, 60);
+    node.el.querySelector('.title').textContent = node.title;
+    node.text = `【来源】${data.url}\n\n${data.text}`;
+    node.textEl.value = node.text;
+    DBG.log('抓取成功', node.title, node.text.length, '字');
+    redrawEdges(); refreshOutline(); window.scheduleSnapshot?.();
+  } catch (e) {
+    node.text = '❌ 抓取失败：' + e.message + '\n（请确认本地服务已启动：node server.js）';
+    node.textEl.value = node.text;
+    DBG.err('抓取失败', e);
+  }
+}
+
+// 拖文件到画布空白处 → 自动创建节点
+function bindCanvasDrop() {
+  const wrap = document.getElementById('canvasWrap');
+  const stop = (e) => { e.preventDefault(); e.stopPropagation(); };
+  ['dragenter', 'dragover'].forEach(ev => wrap.addEventListener(ev, (e) => {
+    if (e.dataTransfer?.types?.includes('Files')) { stop(e); wrap.classList.add('dropping'); }
+  }));
+  ['dragleave', 'drop'].forEach(ev => wrap.addEventListener(ev, (e) => {
+    if (ev === 'dragleave' && e.relatedTarget && wrap.contains(e.relatedTarget)) return;
+    wrap.classList.remove('dropping');
+  }));
+  wrap.addEventListener('drop', async (e) => {
+    const files = [...(e.dataTransfer?.files || [])];
+    if (!files.length) return;
+    stop(e);
+    // 图片拖到已存在的图片节点上时，交给节点自身处理（不新建）
+    const onNode = e.target.closest && e.target.closest('.node');
+    if (onNode && files.length === 1 && files[0].type.startsWith('image/')) return;
+    await importFiles(files);
+  });
+}
+
+// =========================================================================
+// 11.97 任务系统 + 拓扑执行
+// =========================================================================
+let taskSeq = 0;
+
+// 给连线一个可读标签（用于任务面板展示）：N1 → N2（命令）
+function edgeLabelText(edge) {
+  const nodes = Object.values(state.nodes).sort((a, b) => (a.x - b.x) || (a.y - b.y));
+  const idx = (id) => 'N' + (nodes.findIndex(n => n.id === id) + 1);
+  const src = state.nodes[edge.source], dst = state.nodes[edge.target];
+  if (!src || !dst) return edge.id;
+  const cmd = (edge.command || '').trim();
+  const cmdTxt = cmd.startsWith(PREFIX) ? cmd.slice(PREFIX.length).trim() : (cmd || '无命令');
+  return `${idx(edge.source)} → ${idx(edge.target)} （${cmdTxt}）`;
+}
+
+function createTask(name, edgeIds = []) {
+  const id = 't' + (++taskSeq);
+  const task = { id, name: name || ('任务 ' + taskSeq), edgeIds: [...edgeIds] };
+  state.tasks[id] = task;
+  saveTasks();
+  refreshTasks();
+  DBG.log('创建任务', id, task.name, '含', task.edgeIds.length, '条线');
+  return task;
+}
+
+function removeTask(id) {
+  delete state.tasks[id];
+  if (state.activeTaskId === id) state.activeTaskId = null;
+  saveTasks();
+  refreshTasks();
+  redrawEdges();
+}
+
+function toggleEdgeInTask(taskId, edgeId) {
+  const t = state.tasks[taskId];
+  if (!t) return;
+  const i = t.edgeIds.indexOf(edgeId);
+  if (i >= 0) t.edgeIds.splice(i, 1); else t.edgeIds.push(edgeId);
+  saveTasks();
+  refreshTasks();
+  redrawEdges();
+}
+
+// 持久化到 localStorage
+function saveTasks() {
+  const data = Object.values(state.tasks).map(t => ({ name: t.name, edgeIds: t.edgeIds }));
+  try { localStorage.setItem('mc_tasks', JSON.stringify(data)); } catch (e) { DBG.warn('任务保存失败', e); }
+}
+
+function loadTasks() {
+  try {
+    const raw = localStorage.getItem('mc_tasks');
+    if (!raw) return;
+    const arr = JSON.parse(raw);
+    arr.forEach(t => {
+      const id = 't' + (++taskSeq);
+      state.tasks[id] = { id, name: t.name, edgeIds: (t.edgeIds || []).slice() };
+    });
+    DBG.log('已载入', arr.length, '个任务');
+  } catch (e) { DBG.warn('任务载入失败', e); }
+}
+
+// 渲染任务面板
+function refreshTasks() {
+  const body = document.getElementById('taskBody');
+  if (!body) return;
+  const tasks = Object.values(state.tasks);
+  if (!tasks.length) {
+    body.innerHTML = '<div class="task-empty">还没有任务。点击上方「＋新建任务」，然后勾选要包含的连线。</div>';
+    return;
+  }
+  const html = [];
+  for (const t of tasks) {
+    const active = state.activeTaskId === t.id;
+    html.push(`<div class="task-card ${active ? 'active' : ''}" data-task="${t.id}">`);
+    html.push(`<div class="task-head">`);
+    html.push(`<span class="tname">${escapeHtml(t.name)}</span>`);
+    html.push(`<span class="tcount">${t.edgeIds.length} 线</span>`);
+    html.push(`<span class="trun" data-run="${t.id}" title="运行此任务">▶ 运行</span>`);
+    html.push(`</div>`);
+    html.push(`<div class="task-lines">`);
+    if (!t.edgeIds.length) {
+      html.push(`<div class="task-empty">（未选连线）</div>`);
+    } else {
+      for (const eid of t.edgeIds) {
+        const e = state.edges[eid];
+        const label = e ? edgeLabelText(e) : '(已删除的线)';
+        html.push(`<div class="task-line" data-edge-in="${eid}">`);
+        html.push(`<input type="checkbox" checked disabled>`);
+        html.push(`<span>${escapeHtml(label)}</span>`);
+        html.push(`<span class="grow" style="flex:1"></span>`);
+        html.push(`<span data-remove="${t.id}|${eid}" style="color:#dc2626" title="移出任务">×</span>`);
+        html.push(`</div>`);
+      }
+    }
+    html.push(`</div>`);
+    html.push(`<div class="task-actions">`);
+    html.push(`<button data-rename="${t.id}">重命名</button>`);
+    html.push(`<button data-select="${t.id}">选中其线</button>`);
+    html.push(`<button class="danger" data-del="${t.id}">删除任务</button>`);
+    html.push(`</div></div>`);
+  }
+  body.innerHTML = html.join('');
+
+  // 事件
+  body.querySelectorAll('[data-run]').forEach(el => el.addEventListener('click', (e) => {
+    e.stopPropagation(); runTask(el.dataset.run);
+  }));
+  body.querySelectorAll('[data-remove]').forEach(el => el.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const [tid, eid] = el.dataset.remove.split('|');
+    toggleEdgeInTask(tid, eid);
+  }));
+  body.querySelectorAll('[data-rename]').forEach(el => el.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const t = state.tasks[el.dataset.rename];
+    const n = prompt('任务名称：', t.name);
+    if (n !== null) { t.name = n; saveTasks(); refreshTasks(); refreshOutline(); }
+  }));
+  body.querySelectorAll('[data-del]').forEach(el => el.addEventListener('click', (e) => {
+    e.stopPropagation(); removeTask(el.dataset.del);
+  }));
+  body.querySelectorAll('[data-select]').forEach(el => el.addEventListener('click', (e) => {
+    e.stopPropagation();
+    state.activeTaskId = el.dataset.select;
+    refreshTasks(); redrawEdges();
+  }));
+  body.querySelectorAll('.task-card').forEach(el => el.addEventListener('click', () => {
+    state.activeTaskId = el.dataset.task;
+    refreshTasks(); redrawEdges();
+  }));
+}
+
+// 将任务内的边按拓扑依赖顺序排序（上游先执行）
+// 只要任务边集里存在 A→B 且 B 的结果被后续使用，就保证顺序
+function topoSortEdges(edgeIds) {
+  const set = new Set(edgeIds.filter(id => state.edges[id]));
+  // 构造“节点依赖”：边的 target 节点必须在其 source 节点之后处理
+  // 简化做法：按目标节点的拓扑层级排序（用重复松弛）
+  const edges = [...set].map(id => state.edges[id]);
+  // 计算每个节点的深度（无环图）：depth(node) = max(depth(pred)) + 1
+  const depth = {};
+  Object.keys(state.nodes).forEach(n => depth[n] = 0);
+  for (let iter = 0; iter < Object.keys(state.nodes).length + 2; iter++) {
+    let changed = false;
+    for (const e of edges) {
+      if (depth[e.target] < depth[e.source] + 1) {
+        depth[e.target] = depth[e.source] + 1;
+        changed = true;
+      }
+    }
+    if (!changed) break;
+  }
+  return edges.sort((a, b) => depth[a.target] - depth[b.target]);
+}
+
+// 运行一个任务：按拓扑顺序跑任务内的所有连线，再跑相关的执行节点
+async function runTask(taskId) {
+  const t = state.tasks[taskId];
+  if (!t) return;
+  state.activeTaskId = taskId;
+  refreshTasks();
+  const ordered = topoSortEdges(t.edgeIds);
+  DBG.log('========== 运行任务', t.name, '共', ordered.length, '条线 ==========');
+
+  for (const e of ordered) await runEdge(e.id);
+
+  // 任务内所有被指的 exec 节点，按拓扑顺序跑
+  const execIds = new Set();
+  for (const e of ordered) {
+    const dst = state.nodes[e.target];
+    if (dst && dst.kind === 'exec') execIds.add(dst.id);
+  }
+  const execs = [...execIds].map(id => state.nodes[id])
+    .sort((a, b) => (depthOf(a.id) - depthOf(b.id)));
+  for (const n of execs) await runExecNode(n.id);
+  DBG.log('========== 任务', t.name, '完成 ==========');
+}
+
+function depthOf(nodeId) {
+  // 简单计算：从起点到该节点的最长路径（用于 exec 排序）
+  const edges = Object.values(state.edges);
+  const depth = {};
+  Object.keys(state.nodes).forEach(n => depth[n] = 0);
+  for (let i = 0; i < Object.keys(state.nodes).length + 2; i++) {
+    let ch = false;
+    for (const e of edges) if (depth[e.target] < depth[e.source] + 1) { depth[e.target] = depth[e.source] + 1; ch = true; }
+    if (!ch) break;
+  }
+  return depth[nodeId] || 0;
+}
+
+// 左侧 Tab 切换
+function switchOlTab(tab) {
+  state.olTab = tab;
+  document.querySelectorAll('.ol-tab').forEach(el =>
+    el.classList.toggle('active', el.dataset.tab === tab));
+  document.getElementById('paneOutline').style.display = tab === 'outline' ? 'flex' : 'none';
+  document.getElementById('paneTasks').style.display = tab === 'tasks' ? 'flex' : 'none';
+}
+
+// =========================================================================
+// 11.99 画布保存 / 导出 / 导入
+// =========================================================================
+// 把当前画布导出为纯数据对象（含图片 dataURL）
+function exportCanvasData() {
+  return {
+    format: 'mutiplechat-canvas',
+    version: 1,
+    savedAt: new Date().toISOString(),
+    view: { x: view.x, y: view.y, scale: view.scale },
+    nodes: Object.values(state.nodes).map(n => ({
+      id: n.id, kind: n.kind, title: n.title,
+      x: n.x, y: n.y, w: n.w, h: n.h,
+      text: n.text || '', src: n.src || '', prompt: n.prompt || '',
+      zoneId: n.zoneId || null, level: n.level || 1,
+    })),
+    edges: Object.values(state.edges).map(e => ({
+      id: e.id, source: e.source, target: e.target, command: e.command || '',
+    })),
+    zones: Object.values(state.zones).map(z => ({
+      id: z.id, title: z.title, x: z.x, y: z.y, w: z.w, h: z.h,
+      color: z.color, level: z.level || 1,
+    })),
+    tasks: Object.values(state.tasks).map(t => ({ name: t.name, edgeIds: [...t.edgeIds] })),
+  };
+}
+
+// 从数据对象重建整个画布
+function importCanvasData(data) {
+  if (!data || data.format !== 'mutiplechat-canvas') {
+    throw new Error('不是有效的画布文件');
+  }
+  window.__silentImport = true;   // 导入期间跳过逐项副作用，避免卡顿
+  try {
+    clearCanvas();
+
+  // 区域
+  for (const z of data.zones || []) {
+    const zone = createZone({ title: z.title, x: z.x, y: z.y, w: z.w, h: z.h, color: z.color, level: z.level });
+    // 保持原 id，以便节点归属引用一致
+    const old = state.zones[zone.id];
+    delete state.zones[zone.id];
+    zone.id = z.id;
+    zone.el.id = 'zone-' + z.id;
+    state.zones[z.id] = zone;
+    layoutZone(zone);
+    void old;
+  }
+
+  // 节点
+  for (const n of data.nodes || []) {
+    const node = createNode(n.kind, {
+      title: n.title, x: n.x, y: n.y, w: n.w, h: n.h,
+      text: n.text, src: n.src, prompt: n.prompt,
+      zoneId: n.zoneId, level: n.level,
+    });
+    // 保持原 id，保证连线引用一致
+    const oldId = node.id;
+    delete state.nodes[oldId];
+    node.id = n.id;
+    node.el.id = 'node-' + n.id;
+    state.nodes[n.id] = node;
+  }
+
+  // 连线（此时节点都已就位）
+  for (const e of data.edges || []) {
+    if (!state.nodes[e.source] || !state.nodes[e.target]) continue;
+    const edge = addEdge(e.source, e.target);
+    edge.command = e.command || '';
+  }
+
+  // 任务
+  taskSeq = 0;
+  state.tasks = {};
+  for (const t of data.tasks || []) createTask(t.name, t.edgeIds);
+
+  // 同步 seq 计数器，避免后续 id 冲突
+  nodeSeq = Math.max(0, ...Object.keys(state.nodes).map(k => parseInt(String(k).replace(/\D/g, ''), 10) || 0));
+  edgeSeq = Math.max(0, ...Object.keys(state.edges).map(k => parseInt(String(k).replace(/\D/g, ''), 10) || 0));
+  zoneSeq = Math.max(0, ...Object.keys(state.zones).map(k => parseInt(String(k).replace(/\D/g, ''), 10) || 0));
+
+  // 视图
+  if (data.view) { view.x = data.view.x; view.y = data.view.y; view.scale = data.view.scale; }
+
+  refreshAllZonePickers();
+  applyView();
+  redrawEdges();
+  refreshOutline();
+  refreshTasks();
+  refreshSnapshot();
+  DBG.log('画布已导入：', (data.nodes || []).length, '节点,', (data.edges || []).length, '连线');
+  } finally {
+    window.__silentImport = false;
+  }
+}
+
+// 清空整个画布
+function clearCanvas() {
+  Object.values(state.edges).forEach(e => e.labelEl?.remove());
+  Object.values(state.nodes).forEach(n => n.el?.remove());
+  Object.values(state.zones).forEach(z => z.el?.remove());
+  state.nodes = {}; state.edges = {}; state.zones = {};
+  state.tasks = {}; state.selectedEdgeId = null; state.activeTaskId = null;
+  state.filterZoneId = 'all';
+  nodeSeq = 0; edgeSeq = 0; zoneSeq = 0; taskSeq = 0;
+  const msgs = document.getElementById('msgs');
+  if (msgs) msgs.innerHTML = '';
+  DBG.log('画布已清空');
+}
+
+// ---- 轻提示 ----
+let toastTimer = null;
+function flashToast(msg) {
+  const el = document.getElementById('toast');
+  if (!el) return;
+  el.textContent = msg;
+  el.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.classList.remove('show'), 1600);
+}
+
+// ---- localStorage 自动保存 ----
+let autosaveTimer = null;
+function autosaveCanvas() {
+  clearTimeout(autosaveTimer);
+  autosaveTimer = setTimeout(() => {
+    try {
+      localStorage.setItem('mc_canvas', JSON.stringify(exportCanvasData()));
+      DBG.log('已自动保存到本地');
+    } catch (e) {
+      // 通常是图片太大超出 localStorage 限额
+      DBG.warn('自动保存失败（可能图片太大）：', e.message);
+    }
+  }, 500);
+}
+
+function restoreCanvas() {
+  const raw = localStorage.getItem('mc_canvas');
+  if (!raw) return false;
+  try {
+    importCanvasData(JSON.parse(raw));
+    DBG.log('已从本地恢复上次画布');
+    return true;
+  } catch (e) {
+    DBG.warn('本地画布恢复失败：', e.message);
+    return false;
+  }
+}
+
+// ---- 导出 / 导入文件 ----
+function exportToFile() {
+  const data = exportCanvasData();
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  const ts = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-');
+  a.href = url;
+  a.download = `canvas-${ts}.json`;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  DBG.log('已导出 JSON 文件');
+}
+
+async function importFromFile(file) {
+  try {
+    const text = await readAsText(file);
+    const data = JSON.parse(text);
+    importCanvasData(data);
+    autosaveCanvas();
+  } catch (e) {
+    DBG.err('导入失败：', e);
+    alert('导入失败：' + e.message);
+  }
+}
+
+// =========================================================================
 // 12. 初始化
 // =========================================================================
 function init() {
@@ -1898,6 +2517,46 @@ function init() {
     createNode('img', { x: 560, y: 340 }));
   document.getElementById('addExec').addEventListener('click', () =>
     createNode('exec', { x: 300, y: 420 }));
+
+  // ---- 左侧 Tab 与任务 ----
+  document.querySelectorAll('.ol-tab').forEach(el =>
+    el.addEventListener('click', () => switchOlTab(el.dataset.tab)));
+  document.getElementById('addTask').addEventListener('click', () => {
+    const name = prompt('任务名称：', '任务 ' + (Object.keys(state.tasks).length + 1));
+    if (name === null) return;
+    // 以当前选中的连线作为初始成员
+    const init = state.selectedEdgeId ? [state.selectedEdgeId] : [];
+    state.activeTaskId = createTask(name, init).id;
+    refreshTasks();
+  });
+
+  // ---- 本地资料导入 ----
+  document.getElementById('importFiles').addEventListener('click', () =>
+    document.getElementById('filePicker').click());
+  document.getElementById('filePicker').addEventListener('change', (e) => {
+    if (e.target.files.length) importFiles(e.target.files);
+    e.target.value = '';   // 允许重复选同一文件
+  });
+  document.getElementById('importUrl').addEventListener('click', () => importFromUrl());
+  bindCanvasDrop();
+
+  // ---- 保存 / 导出 / 导入 ----
+  document.getElementById('saveCanvas').addEventListener('click', () => {
+    try {
+      localStorage.setItem('mc_canvas', JSON.stringify(exportCanvasData()));
+      DBG.log('已保存到本地');
+      flashToast('✅ 已保存');
+    } catch (e) {
+      alert('保存失败（图片可能太大，请用「⬇ 导出」存成文件）：' + e.message);
+    }
+  });
+  document.getElementById('exportJson').addEventListener('click', exportToFile);
+  document.getElementById('importJson').addEventListener('click', () =>
+    document.getElementById('jsonPicker').click());
+  document.getElementById('jsonPicker').addEventListener('change', (e) => {
+    if (e.target.files[0]) importFromFile(e.target.files[0]);
+    e.target.value = '';
+  });
   document.getElementById('addZone').addEventListener('click', () =>
     createZone({}));
   document.getElementById('runAll').addEventListener('click', runAll);
@@ -1931,7 +2590,10 @@ function init() {
   let snapTimer = null;
   window.scheduleSnapshot = () => {
     clearTimeout(snapTimer);
-    snapTimer = setTimeout(refreshSnapshot, 250);
+    snapTimer = setTimeout(() => {
+      refreshSnapshot();
+      autosaveCanvas();     // 画布变化时同步自动保存
+    }, 250);
   };
 
   // ---- 画布平移：空白处拖拽 或 空格+拖拽 ----
@@ -1970,21 +2632,26 @@ function init() {
     }
   });
 
-  // 示例：文档节点 + 输出节点 + 一条命令连线
-  const a = createNode('doc', { x: 100, y: 140, title: '文档',
-    text: '人工智能正在改变世界。大语言模型可以写代码、做翻译、回答问题、总结长文。' +
-          '它们通过海量文本训练，学会了语言的统计规律。在实际应用中，人们常常需要把长文档压缩成要点，' +
-          '或者提炼出核心结论，以便快速阅读和决策。' });
-  const b = createNode('output', { x: 620, y: 140, title: '输出' });
-  const e1 = addEdge(a.id, b.id);
-  e1.command = '🖐️总结';
-  layoutEdgeLabel(e1);
+  // 优先从本地恢复上次画布；没有则创建示例
+  const restored = restoreCanvas();
+  if (!restored) {
+    const a = createNode('doc', { x: 100, y: 140, title: '文档',
+      text: '人工智能正在改变世界。大语言模型可以写代码、做翻译、回答问题、总结长文。' +
+            '它们通过海量文本训练，学会了语言的统计规律。在实际应用中，人们常常需要把长文档压缩成要点，' +
+            '或者提炼出核心结论，以便快速阅读和决策。' });
+    const b = createNode('output', { x: 620, y: 140, title: '输出' });
+    const e1 = addEdge(a.id, b.id);
+    e1.command = '🖐️总结';
+    layoutEdgeLabel(e1);
+    applyView();
+    fitToContent();
+  }
 
-  // 初始视图：适应全部内容，一眼看到整张图
-  applyView();
-  fitToContent();
   refreshSnapshot();                    // 同步画布快照到侧边栏
   refreshOutline();                     // 初始化大纲
+  loadTasks();                          // 载入已保存的任务
+  refreshTasks();
+  switchOlTab('outline');
   refreshLevelFilter();                 // 初始化层级过滤器
   addMsg('assistant',
     '你好，我能看到你当前的画布。可以问我：\n- 「概括当前图的结构」\n- 「N1 的内容讲了什么？」\n- 上传图片后「描述画布上的图片」',
@@ -1997,7 +2664,7 @@ function init() {
   }
 
   window.addEventListener('resize', () => { redrawEdges(); drawMiniMap(); });
-  DBG.log('初始化完成。对话栏可读取整张画布；Alt+Enter 运行连线/执行节点；区域=大纲层级。');
+  DBG.log('初始化完成。左侧：大纲/任务；Alt+Enter 运行；区域=大纲层级。');
 }
 
 init();
