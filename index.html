@@ -20,6 +20,123 @@
   #canvas { position: absolute; inset: 0; overflow: hidden; cursor: default; }
   #canvas.panning { cursor: grabbing; }
 
+  /* 布局：画布区 + 右侧侧边栏（flex） */
+  #stage { position: absolute; inset: 0; display: flex; }
+  #canvasWrap { position: relative; flex: 1 1 auto; min-width: 0; overflow: hidden; }
+
+  /* ---------- 左侧大纲栏 ---------- */
+  #outline {
+    position: relative; flex: 0 0 250px; width: 250px;
+    background: #fff; border-right: 1px solid var(--border);
+    display: flex; flex-direction: column; min-width: 0; z-index: 30;
+  }
+  #outline.collapsed { flex-basis: 0; width: 0; border-right: 0; overflow: hidden; }
+  #outline.collapsed .ol-body, #outline.collapsed .ol-head { display: none; }
+  .ol-head {
+    display: flex; align-items: center; gap: 6px;
+    padding: 10px 12px; border-bottom: 1px solid #eceef1;
+    font-size: 13px; font-weight: 700; color: #333;
+  }
+  .ol-head .spacer { flex: 1; }
+  .ol-body { flex: 1; overflow-y: auto; padding: 8px; font-size: 12.5px; }
+
+  /* 大纲条目 */
+  .ol-zone { margin-bottom: 8px; border: 1px solid #eceef1; border-radius: 8px; overflow: hidden; }
+  .ol-zone-head {
+    display: flex; align-items: center; gap: 6px; padding: 6px 8px;
+    background: #f7f8fa; cursor: pointer; font-weight: 600; color: #333;
+  }
+  .ol-zone-head:hover { background: #eef0f4; }
+  .ol-zone-head .zcolor { width: 10px; height: 10px; border-radius: 3px; flex: none; }
+  .ol-zone-head .ztitle { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .ol-zone-head .zcount { font-size: 11px; color: #999; }
+  .ol-items { padding: 4px; }
+  .ol-item {
+    display: flex; align-items: center; gap: 6px; padding: 4px 8px;
+    border-radius: 6px; cursor: pointer; color: #444;
+  }
+  .ol-item:hover { background: #f0f1f4; }
+  .ol-item.active { background: rgba(79,70,229,.12); color: var(--accent); font-weight: 600; }
+  .ol-item .ikind { font-size: 11px; }
+  .ol-item .iname { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .ol-empty { color: #b3b6bb; font-size: 12px; padding: 8px; font-style: italic; }
+
+  /* 层级过滤器 */
+  #levelFilter {
+    display: flex; gap: 4px; flex-wrap: wrap; padding: 6px 8px;
+    border-bottom: 1px solid #eceef1;
+  }
+  .lvl-btn {
+    font-size: 11.5px; padding: 3px 9px; border-radius: 999px;
+    background: #eef0f3; color: #555; cursor: pointer; border: 1px solid transparent;
+    white-space: nowrap;
+  }
+  .lvl-btn:hover { background: #e2e5ea; }
+  .lvl-btn.active { background: var(--accent); color: #fff; }
+
+  #toggleOutline {
+    position: fixed; left: 16px; top: 16px; z-index: 31;
+    padding: 7px 12px; background: #fff; color: #333;
+    border: 1px solid var(--border); border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,.08);
+  }
+  #toggleOutline:hover { background: #f5f6f8; }
+
+  /* ---------- 区域（Zone）---------- */
+  .zone {
+    position: absolute; z-index: 0;
+    border-radius: 14px; border: 2px dashed;
+    pointer-events: none;
+  }
+  .zone .zone-bar {
+    position: absolute; left: 0; top: 0; right: 0;
+    display: flex; align-items: center; gap: 6px;
+    padding: 4px 10px; border-radius: 12px 12px 0 0;
+    font-size: 12px; font-weight: 700; color: #fff;
+    pointer-events: auto; cursor: grab; user-select: none;
+  }
+  .zone .zone-bar:active { cursor: grabbing; }
+  .zone .zone-title { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .zone .zone-close {
+    width: 16px; height: 16px; line-height: 14px; text-align: center;
+    border-radius: 4px; cursor: pointer; opacity: .85;
+  }
+  .zone .zone-close:hover { background: rgba(255,255,255,.3); opacity: 1; }
+  .zone .zone-resize {
+    position: absolute; right: 0; bottom: 0; width: 16px; height: 16px;
+    cursor: nwse-resize; pointer-events: auto;
+  }
+  /* 层级过滤时淡出不属于当前区域的内容 */
+  .dim { opacity: .12; pointer-events: none !important; }
+  .zone.dim { opacity: .06; }
+
+  /* ---------- 执行节点 ---------- */
+  .node[data-kind="exec"] {
+    border-color: #7c3aed;
+    box-shadow: 0 3px 14px rgba(124,58,237,.18);
+  }
+  .node[data-kind="exec"] .bar { background: #ede9fe; color: #5b21b6; }
+  .node[data-kind="exec"] .dot { background: #7c3aed; }
+  .node .exec-prompt {
+    width: 100%; border: 0; outline: none; resize: none;
+    padding: 8px 9px; font-size: 13px; line-height: 1.5;
+    font-family: inherit; background: transparent; color: #222;
+    border-bottom: 1px dashed #ddd;
+  }
+  .node .exec-prompt::placeholder { color: #b3b6bb; }
+  .node .exec-out {
+    flex: 1; min-height: 30px; padding: 8px 9px; font-size: 13px; line-height: 1.5;
+    white-space: pre-wrap; overflow-y: auto; color: #333; background: #faf9ff;
+  }
+  .node .exec-out.empty::before { content: "（执行结果）"; color: #b3b6bb; }
+  .node .exec-inlabel {
+    font-size: 10.5px; color: #8b5cf6; padding: 2px 9px 0; font-weight: 600;
+  }
+  /* 区域选择器（节点标题栏内）*/
+  .node .zone-pick {
+    font-size: 11px; border: 1px solid #ddd; border-radius: 5px;
+    padding: 1px 4px; max-width: 78px; background: #fff; color: #555; cursor: pointer;
+  }
+
   /* world：所有内容的坐标容器，通过 transform 实现缩放平移 */
   #world {
     position: absolute; left: 0; top: 0;
@@ -188,39 +305,144 @@
   }
   #minimap.hidden { display: none; }
   #minimap canvas { display: block; width: 100%; height: 100%; }
+
+  /* ---------- 侧边栏（对话 + 画布识别）---------- */
+  #sidebar {
+    position: relative; flex: 0 0 360px; width: 360px;
+    background: #fff; border-left: 1px solid var(--border);
+    display: flex; flex-direction: column; min-width: 0; z-index: 30;
+  }
+  #sidebar.collapsed { flex-basis: 0; width: 0; border-left: 0; }
+  #sidebar.collapsed .sb-body, #sidebar.collapsed .sb-head { display: none; }
+
+  .sb-head {
+    display: flex; align-items: center; gap: 8px;
+    padding: 10px 12px; border-bottom: 1px solid #eceef1;
+    font-size: 13px; font-weight: 700; color: #333;
+  }
+  .sb-head .spacer { flex: 1; }
+  .sb-head .chip {
+    font-size: 11.5px; font-weight: 600; color: var(--accent);
+    background: rgba(79,70,229,.1); padding: 3px 8px; border-radius: 999px;
+  }
+
+  .sb-body { flex: 1; display: flex; flex-direction: column; min-height: 0; }
+
+  /* 画布快照预览区 */
+  #snapshot {
+    border-bottom: 1px solid #eceef1; background: #fafbfc;
+    padding: 8px 12px; font-size: 12px; color: #666; max-height: 130px; overflow: auto;
+  }
+  #snapshot .snap-title { font-weight: 700; color: #444; margin-bottom: 4px; display: flex; gap: 6px; align-items: center; }
+  #snapshot pre {
+    margin: 0; white-space: pre-wrap; word-break: break-word;
+    font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 11.5px; line-height: 1.5; color: #555;
+  }
+  #snapshot .thumbs { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 6px; }
+  #snapshot .thumbs img {
+    width: 44px; height: 44px; object-fit: cover; border-radius: 6px; border: 1px solid var(--border);
+  }
+
+  /* 消息列表 */
+  #msgs { flex: 1; overflow-y: auto; padding: 12px; display: flex; flex-direction: column; gap: 10px; }
+  .msg { max-width: 92%; padding: 8px 11px; border-radius: 12px; font-size: 13px; line-height: 1.6; white-space: pre-wrap; word-break: break-word; }
+  .msg.user { align-self: flex-end; background: var(--accent); color: #fff; border-bottom-right-radius: 4px; }
+  .msg.assistant { align-self: flex-start; background: #f1f2f4; color: #222; border-bottom-left-radius: 4px; }
+  .msg.error { align-self: flex-start; background: #fee2e2; color: #991b1b; font-size: 12px; }
+  .msg .meta { display: block; font-size: 10.5px; color: #8a8f98; margin-bottom: 3px; }
+  .msg.user .meta { color: rgba(255,255,255,.75); }
+
+  /* 输入区 */
+  .sb-input { border-top: 1px solid #eceef1; padding: 10px 12px; }
+  .sb-input textarea {
+    width: 100%; min-height: 62px; max-height: 200px; resize: vertical;
+    border: 1px solid var(--border); border-radius: 10px; padding: 8px 10px;
+    font-size: 13px; font-family: inherit; line-height: 1.5; outline: none;
+  }
+  .sb-input textarea:focus { border-color: var(--accent); }
+  .sb-actions { display: flex; gap: 8px; align-items: center; margin-top: 8px; }
+  .sb-actions .grow { flex: 1; }
+  .sb-actions label { font-size: 12px; color: #666; display: flex; gap: 4px; align-items: center; cursor: pointer; }
+
+  /* 折叠/展开按钮 */
+  #toggleSidebar {
+    position: fixed; right: 16px; top: 16px; z-index: 31;
+    padding: 7px 12px; background: #fff; color: #333;
+    border: 1px solid var(--border); border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,.08);
+  }
+  #toggleSidebar:hover { background: #f5f6f8; }
 </style>
 </head>
 <body>
 
-<div id="canvas">
-  <div id="world">
-    <svg id="edges"></svg>
+<div id="stage">
+  <aside id="outline">
+    <div class="ol-head">
+      <span>📑 大纲</span>
+      <span class="spacer"></span>
+      <button class="ghost" id="addZone" style="padding:4px 8px;font-size:12px">＋区域</button>
+    </div>
+    <div id="levelFilter"></div>
+    <div class="ol-body" id="outlineBody"></div>
+  </aside>
+
+  <div id="canvasWrap">
+    <div id="canvas">
+      <div id="world">
+        <svg id="edges"></svg>
+      </div>
+    </div>
+    <div id="minimap"><canvas></canvas></div>
+    <div id="viewctl">
+      <button id="zoomOut" title="缩小">−</button>
+      <span id="zoomLabel">100%</span>
+      <button id="zoomIn" title="放大">＋</button>
+      <button id="fit" title="适应全部内容">适应</button>
+      <button id="reset1" title="100% 居中">1:1</button>
+      <button id="toggleMap" title="显示/隐藏小地图">地图</button>
+    </div>
+    <div id="toolbar">
+      <input id="apiKey" class="key" type="password" placeholder="DeepSeek API Key" />
+      <button class="ghost" id="addDoc">＋ 文档节点</button>
+      <button class="ghost" id="addOutput">＋ 输出节点</button>
+      <button class="ghost" id="addImg">＋ 图片节点</button>
+      <button class="ghost" id="addExec">＋ 执行节点</button>
+      <button id="runAll">全部运行 ▶</button>
+      <span id="hint">
+        连出线：拖节点右侧圆点 · 编辑命令：单击连线标签 · 执行：<kbd>Alt</kbd>+<kbd>Enter</kbd><br>
+        平移：空白处拖拽 · 缩放：<kbd>Ctrl</kbd>滚轮 · 右侧对话可读取整张画布
+      </span>
+    </div>
   </div>
+
+  <aside id="sidebar">
+    <div class="sb-head">
+      <span>💬 对话（看图）</span>
+      <span class="chip" id="ctxChip">上下文：0 节点</span>
+      <span class="spacer"></span>
+      <button class="ghost" id="clearChat" title="清空对话">清空</button>
+    </div>
+    <div class="sb-body">
+      <div id="snapshot">
+        <div class="snap-title">📋 将随消息发送的画布快照 <span style="font-weight:400;color:#999">（自动更新）</span></div>
+        <pre id="snapText">（空画布）</pre>
+        <div class="thumbs" id="snapThumbs"></div>
+      </div>
+      <div id="msgs"></div>
+      <div class="sb-input">
+        <textarea id="chatInput" placeholder="问关于画布的问题，如「帮我概括当前图的结构」「N2 的内容讲了什么？」&#10;Enter 发送 · Shift+Enter 换行"></textarea>
+        <div class="sb-actions">
+          <label><input type="checkbox" id="includeImages" checked> 附带图片</label>
+          <span class="grow"></span>
+          <button id="sendMsg">发送 ▶</button>
+        </div>
+      </div>
+    </div>
+  </aside>
 </div>
 
-<div id="minimap"><canvas></canvas></div>
-
-<div id="viewctl">
-  <button id="zoomOut" title="缩小">−</button>
-  <span id="zoomLabel">100%</span>
-  <button id="zoomIn" title="放大">＋</button>
-  <button id="fit" title="适应全部内容">适应</button>
-  <button id="reset1" title="100% 居中">1:1</button>
-  <button id="toggleMap" title="显示/隐藏小地图">地图</button>
-</div>
-
-<div id="toolbar">
-  <input id="apiKey" class="key" type="password" placeholder="DeepSeek API Key" />
-  <button class="ghost" id="addDoc">＋ 文档节点</button>
-  <button class="ghost" id="addOutput">＋ 输出节点</button>
-  <button class="ghost" id="addImg">＋ 图片节点</button>
-  <button id="runAll">全部运行 ▶</button>
-  <span id="hint">
-    连出线：拖节点右侧圆点 → 落到另一节点 · 图片：拖入/粘贴到图片节点，可从前连到输出节点让模型识别<br>
-    编辑命令：单击连线上的标签 · 执行：<kbd>Alt</kbd>+<kbd>Enter</kbd> ·
-    平移：空白处拖拽或空格拖 · 缩放：<kbd>Ctrl</kbd>滚轮
-  </span>
-</div>
+<button id="toggleOutline" title="展开/折叠大纲栏">📑 大纲</button>
+<button id="toggleSidebar" title="展开/折叠对话栏">≡ 对话</button>
 
 <script>
 // =========================================================================
@@ -229,12 +451,18 @@
 const PREFIX = '🖐️';
 const API_URL = 'https://api.deepseek.com/chat/completions';
 
-let nodeSeq = 0, edgeSeq = 0;
+let nodeSeq = 0, edgeSeq = 0, zoneSeq = 0;
+
+// 区域调色板（每个新区域依次取色）
+const ZONE_COLORS = ['#0ea5e9', '#f59e0b', '#10b981', '#8b5cf6', '#ef4444', '#14b8a6', '#ec4899'];
 
 const state = {
-  nodes: {},   // id -> { id, kind, title, x, y, w, h, text }
-  edges: {},   // id -> { id, source, target, command }
+  nodes: {},   // id -> { id, kind, title, x, y, w, h, text, src, prompt, zoneId, el }
+  edges: {},   // id -> { id, source, target, command, labelEl }
+  zones: {},   // id -> { id, title, x, y, w, h, color, level, el }
   selectedEdgeId: null,
+  // 当前层级过滤：'all' 或某个 zoneId（只显示该区域及其节点）
+  filterZoneId: 'all',
 };
 
 // 当前正在拖拽的连线预览 { source, x1, y1, x2, y2 }
@@ -319,27 +547,297 @@ function fitToContent(padding = 60) {
 }
 
 // =========================================================================
+// 1.8 区域（Zone）—— 大纲的层级单位
+// =========================================================================
+function createZone(opts = {}) {
+  const id = 'z' + (++zoneSeq);
+  const color = opts.color || ZONE_COLORS[(zoneSeq - 1) % ZONE_COLORS.length];
+  const zone = {
+    id,
+    title: opts.title || ('区域 ' + zoneSeq),
+    x: opts.x ?? 60 + (zoneSeq % 4) * 30,
+    y: opts.y ?? 60 + (zoneSeq % 4) * 30,
+    w: opts.w ?? 420,
+    h: opts.h ?? 300,
+    color,
+    level: opts.level ?? 1,
+    el: null,
+  };
+  state.zones[id] = zone;
+  renderZone(zone);
+  layoutZone(zone);
+  refreshAllZonePickers();    // 新区域要出现在所有节点的下拉里
+  refreshOutline();
+  window.scheduleSnapshot?.();
+  DBG.log('创建区域', id, zone.title);
+  return zone;
+}
+
+function removeZone(id) {
+  const z = state.zones[id];
+  if (!z) return;
+  // 区域内节点解除归属（不删节点）
+  Object.values(state.nodes).forEach(n => { if (n.zoneId === id) n.zoneId = null; });
+  if (state.filterZoneId === id) state.filterZoneId = 'all';
+  z.el.remove();
+  delete state.zones[id];
+  refreshAllZonePickers();    // 从下拉里移除该区域
+  refreshOutline();
+  applyFilter();
+  DBG.log('删除区域', id);
+}
+
+function renderZone(zone) {
+  const el = document.createElement('div');
+  el.className = 'zone';
+  el.id = 'zone-' + zone.id;
+  el.innerHTML = `
+    <div class="zone-bar">
+      <span class="zone-title"></span>
+      <span class="zone-close" title="删除区域">×</span>
+    </div>
+    <div class="zone-resize"></div>
+  `;
+  const bar = el.querySelector('.zone-bar');
+  bar.style.background = zone.color;
+
+  // 拖动区域
+  bar.addEventListener('mousedown', (e) => {
+    if (e.target.classList.contains('zone-close')) return;
+    e.stopPropagation();
+    const sx = e.clientX, sy = e.clientY, ox = zone.x, oy = zone.y;
+    const zoneNodes = nodesInZone(zone.id);
+    // 用累积位移避免重复叠加
+    let lastDx = 0, lastDy = 0;
+    function onMove2(ev) {
+      const dx = (ev.clientX - sx) / view.scale;
+      const dy = (ev.clientY - sy) / view.scale;
+      zone.x = ox + dx; zone.y = oy + dy;
+      layoutZone(zone);
+      const stepX = dx - lastDx, stepY = dy - lastDy;
+      lastDx = dx; lastDy = dy;
+      for (const n of zoneNodes) { n.x += stepX; n.y += stepY; layoutNode(n); }
+      redrawEdges();
+    }
+    function onUp() {
+      window.removeEventListener('mousemove', onMove2);
+      window.removeEventListener('mouseup', onUp);
+    }
+    window.addEventListener('mousemove', onMove2);
+    window.addEventListener('mouseup', onUp);
+  });
+
+  el.querySelector('.zone-close').addEventListener('click', (e) => {
+    e.stopPropagation();
+    removeZone(zone.id);
+  });
+
+  // 缩放手柄
+  el.querySelector('.zone-resize').addEventListener('mousedown', (e) => {
+    e.stopPropagation(); e.preventDefault();
+    const sx = e.clientX, sy = e.clientY, ow = zone.w, oh = zone.h;
+    function onMove(ev) {
+      zone.w = Math.max(160, ow + (ev.clientX - sx) / view.scale);
+      zone.h = Math.max(120, oh + (ev.clientY - sy) / view.scale);
+      layoutZone(zone);
+    }
+    function onUp() {
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onUp);
+    }
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+  });
+
+  // 双击标题改名
+  el.querySelector('.zone-title').addEventListener('dblclick', (e) => {
+    e.stopPropagation();
+    const t = prompt('区域名称（大纲章节名）：', zone.title);
+    if (t !== null) { zone.title = t; el.querySelector('.zone-title').textContent = t; refreshOutline(); }
+  });
+
+  // 区域节点挂到 world 的最底层（z-index 最低）
+  worldEl().insertBefore(el, worldEl().firstChild);
+  zone.el = el;
+}
+
+function layoutZone(zone) {
+  const el = zone.el;
+  if (!el) return;
+  el.style.left = zone.x + 'px';
+  el.style.top = zone.y + 'px';
+  el.style.width = zone.w + 'px';
+  el.style.height = zone.h + 'px';
+  el.style.borderColor = zone.color;
+  el.style.background = zone.color + '14';
+  el.querySelector('.zone-title').textContent = zone.title;
+}
+
+function nodesInZone(zoneId) {
+  return Object.values(state.nodes).filter(n => n.zoneId === zoneId);
+}
+
+// -------- 层级过滤：只显示某个区域（或全部）--------
+function applyFilter() {
+  const f = state.filterZoneId;
+  const showAll = f === 'all';
+
+  // 节点：属于当前区域的显示，其他淡出
+  for (const n of Object.values(state.nodes)) {
+    const visible = showAll || n.zoneId === f;
+    n.el.classList.toggle('dim', !visible);
+  }
+  // 区域：非当前区域淡出
+  for (const z of Object.values(state.zones)) {
+    const visible = showAll || z.id === f;
+    z.el.classList.toggle('dim', !visible);
+  }
+  // 连线：两端都可见才显示，否则淡出
+  for (const e of Object.values(state.edges)) {
+    const a = state.nodes[e.source], b = state.nodes[e.target];
+    const visible = showAll
+      || ((a && a.zoneId === f) && (b && b.zoneId === f));
+    if (e.pathEl) e.pathEl.classList.toggle('dim', !visible);
+    if (e.labelEl) e.labelEl.classList.toggle('dim', !visible);
+  }
+  refreshLevelFilter();
+  DBG.log('层级过滤 ->', showAll ? '全部' : (state.zones[f]?.title || f));
+}
+
+// -------- 大纲栏 --------
+function refreshOutline() {
+  const body = document.getElementById('outlineBody');
+  if (!body) return;
+  const zones = Object.values(state.zones);
+  const html = [];
+
+  for (const z of zones) {
+    const items = nodesInZone(z.id);
+    html.push(`<div class="ol-zone">`);
+    html.push(`<div class="ol-zone-head" data-zone="${z.id}">`);
+    html.push(`<span class="zcolor" style="background:${z.color}"></span>`);
+    html.push(`<span class="ztitle">${escapeHtml(z.title)}</span>`);
+    html.push(`<span class="zcount">${items.length}</span>`);
+    html.push(`</div>`);
+    html.push(`<div class="ol-items">`);
+    if (!items.length) html.push(`<div class="ol-empty">（无节点）</div>`);
+    for (const n of items) html.push(outlineItem(n));
+    html.push(`</div></div>`);
+  }
+
+  // 未分类节点
+  const loose = Object.values(state.nodes).filter(n => !n.zoneId);
+  html.push(`<div class="ol-zone">`);
+  html.push(`<div class="ol-zone-head" data-zone="">`);
+  html.push(`<span class="zcolor" style="background:#c3c6cb"></span>`);
+  html.push(`<span class="ztitle">未分类</span>`);
+  html.push(`<span class="zcount">${loose.length}</span>`);
+  html.push(`</div><div class="ol-items">`);
+  if (!loose.length) html.push(`<div class="ol-empty">（无）</div>`);
+  for (const n of loose) html.push(outlineItem(n));
+  html.push(`</div></div>`);
+
+  body.innerHTML = html.join('');
+
+  // 点击区域标题 -> 聚焦该区域
+  body.querySelectorAll('.ol-zone-head').forEach(h => {
+    h.addEventListener('click', () => {
+      const zid = h.dataset.zone;
+      if (zid && state.zones[zid]) focusZone(zid);
+      else fitToContent();
+    });
+  });
+  // 点击节点 -> 选中并聚焦
+  body.querySelectorAll('.ol-item').forEach(it => {
+    it.addEventListener('click', () => {
+      const nid = it.dataset.node;
+      if (state.nodes[nid]) focusNode(nid);
+    });
+  });
+}
+
+const KIND_ICON = { doc: '📄', output: '🎯', img: '🖼️', exec: '⚙️' };
+function outlineItem(n) {
+  const label = (n.kind === 'img'
+    ? (n.src ? '图片' : '空图片')
+    : n.kind === 'exec'
+      ? (n.prompt ? n.prompt.slice(0, 20) : '执行节点')
+      : ((n.text || '').trim().slice(0, 20) || '（空）'));
+  return `<div class="ol-item" data-node="${n.id}">
+    <span class="ikind">${KIND_ICON[n.kind] || '⬜'}</span>
+    <span class="iname">${escapeHtml(label)}</span>
+  </div>`;
+}
+
+// -------- 层级过滤器 UI --------
+function refreshLevelFilter() {
+  const bar = document.getElementById('levelFilter');
+  if (!bar) return;
+  const zones = Object.values(state.zones);
+  const btns = [`<span class="lvl-btn ${state.filterZoneId === 'all' ? 'active' : ''}" data-f="all">全部</span>`];
+  for (const z of zones) {
+    btns.push(`<span class="lvl-btn ${state.filterZoneId === z.id ? 'active' : ''}" data-f="${z.id}">${escapeHtml(z.title)}</span>`);
+  }
+  bar.innerHTML = btns.join('');
+  bar.querySelectorAll('.lvl-btn').forEach(b => {
+    b.addEventListener('click', () => {
+      state.filterZoneId = b.dataset.f;
+      applyFilter();
+    });
+  });
+}
+
+// 聚焦到某个区域（居中显示）
+function focusZone(zid) {
+  const z = state.zones[zid];
+  if (!z) return;
+  const r = canvasEl().getBoundingClientRect();
+  const pad = 40;
+  const sx = (r.width - pad * 2) / z.w, sy = (r.height - pad * 2) / z.h;
+  view.scale = Math.min(2, Math.max(0.15, Math.min(sx, sy)));
+  view.x = (r.width - z.w * view.scale) / 2 - z.x * view.scale;
+  view.y = (r.height - z.h * view.scale) / 2 - z.y * view.scale;
+  applyView();
+}
+
+// 聚焦到某个节点
+function focusNode(nid) {
+  const n = state.nodes[nid];
+  if (!n) return;
+  selectNode(nid);
+  const r = canvasEl().getBoundingClientRect();
+  view.x = r.width / 2 - (n.x + n.w / 2) * view.scale;
+  view.y = r.height / 2 - (n.y + n.h / 2) * view.scale;
+  applyView();
+}
+
+// =========================================================================
 // 2. 节点增删
 // =========================================================================
 function createNode(kind, opts = {}) {
   const id = 'n' + (++nodeSeq);
-  const titles = { output: '输出', img: '图片', doc: '文档' };
+  const titles = { output: '输出', img: '图片', doc: '文档', exec: '执行' };
   const node = {
     id,
-    kind,                                  // 'doc' | 'output' | 'img'
+    kind,                                  // 'doc' | 'output' | 'img' | 'exec'
     title: opts.title || titles[kind] || '节点',
     x: opts.x ?? (80 + (nodeSeq % 6) * 40),
     y: opts.y ?? (80 + (nodeSeq % 6) * 40),
-    w: opts.w ?? (kind === 'img' ? 240 : 300),   // 宽度可直接控制
-    h: opts.h ?? (kind === 'img' ? 200 : 160),   // 高度可直接控制
+    w: opts.w ?? (kind === 'img' ? 240 : kind === 'exec' ? 320 : 300),
+    h: opts.h ?? (kind === 'img' ? 200 : kind === 'exec' ? 220 : 160),
     text: opts.text ?? '',
     src: opts.src ?? '',                   // 图片节点的 dataURL
+    prompt: opts.prompt ?? '',             // 执行节点的提示词（写在节点内）
+    zoneId: opts.zoneId ?? null,           // 手动归属的区域
+    level: opts.level ?? 1,                // 大纲层级（预留）
     el: null,
   };
   state.nodes[id] = node;
   renderNode(node);                        // 创建 DOM
   layoutNode(node);
-  DBG.log('创建节点', id, kind);
+  refreshOutline();
+  DBG.log('创建节点', id, kind, 'zone=', node.zoneId);
+  window.scheduleSnapshot?.();
   return node;
 }
 
@@ -352,6 +850,7 @@ function removeNode(id) {
     .forEach(e => removeEdge(e.id));
   node.el.remove();
   delete state.nodes[id];
+  refreshOutline();
   DBG.log('删除节点', id);
 }
 
@@ -376,6 +875,7 @@ function renderNode(node) {
     <div class="bar">
       <span class="dot"></span>
       <span class="title"></span>
+      <select class="zone-pick" title="归属区域（大纲章节）"></select>
       <span class="close" title="删除节点">×</span>
     </div>
     <div class="body"></div>
@@ -430,6 +930,33 @@ function renderNode(node) {
     out.addEventListener('input', () => {
       node.text = out.textContent;
       out.classList.toggle('empty', !node.text);
+      window.scheduleSnapshot?.();
+    });
+  } else if (node.kind === 'exec') {
+    // 执行节点：上方提示词（写在节点内），下方执行结果
+    const inlabel = document.createElement('div');
+    inlabel.className = 'exec-inlabel';
+    inlabel.textContent = '提示词（多输入聚合）';
+    const prompt = document.createElement('textarea');
+    prompt.className = 'exec-prompt';
+    prompt.placeholder = '例如：对比以下多段内容，提炼共同结论…';
+    prompt.value = node.prompt || '';
+    prompt.addEventListener('input', () => {
+      node.prompt = prompt.value;
+      window.scheduleSnapshot?.();
+    });
+    const out = document.createElement('div');
+    out.className = 'exec-out empty';
+    body.appendChild(prompt);
+    body.appendChild(out);
+    node.promptEl = prompt;
+    node.textEl = out;      // 结果写入这里
+    body.style.flexDirection = 'column';
+    // 把标签放到最前（在 body 之前展示）
+    body.parentNode.insertBefore(inlabel, body);
+    // 执行节点可点击自身运行
+    el.querySelector('.title').addEventListener('dblclick', (e) => {
+      e.stopPropagation(); runExecNode(node.id);
     });
   } else {
     const ta = document.createElement('textarea');
@@ -439,6 +966,7 @@ function renderNode(node) {
     node.textEl = ta;
     ta.addEventListener('input', () => {
       node.text = ta.value;
+      window.scheduleSnapshot?.();
       redrawEdges();                        // 内容变化可能改变节点尺寸，重画连线
     });
   }
@@ -457,6 +985,7 @@ function renderNode(node) {
     e.stopPropagation();
     removeNode(node.id);
     redrawEdges();
+    window.scheduleSnapshot?.();
   });
 
   // 尾部端口：从这里拖出连线
@@ -477,8 +1006,43 @@ function renderNode(node) {
     startResize(e, node);
   });
 
+  // 区域选择器：手动指定节点归属哪个区域（大纲章节）
+  const pick = el.querySelector('.zone-pick');
+  pick.addEventListener('mousedown', (e) => e.stopPropagation());
+  pick.addEventListener('change', () => {
+    node.zoneId = pick.value || null;
+    DBG.log('节点', node.id, '归属区域 ->', node.zoneId);
+    refreshOutline();
+    applyFilter();
+    window.scheduleSnapshot?.();
+  });
+  node.zonePickEl = pick;
+
   worldEl().appendChild(el);   // 节点进入 world 坐标系
   node.el = el;
+  refreshZonePicker(node);     // 初始化下拉选项
+}
+
+// 刷新单个节点的区域下拉选项（区域增删后调用）
+function refreshZonePicker(node) {
+  const pick = node.zonePickEl;
+  if (!pick) return;
+  const cur = node.zoneId || '';
+  const opts = ['<option value="">未分类</option>'];
+  for (const z of Object.values(state.zones)) {
+    opts.push(`<option value="${z.id}">${escapeHtml(z.title)}</option>`);
+  }
+  pick.innerHTML = opts.join('');
+  pick.value = state.zones[cur] ? cur : '';
+  if (cur && !state.zones[cur]) node.zoneId = null;
+}
+
+function refreshAllZonePickers() {
+  Object.values(state.nodes).forEach(refreshZonePicker);
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 }
 
 // 把图片文件读成 dataURL 挂到图片节点上
@@ -488,6 +1052,7 @@ function loadImageFile(node, file) {
     node.src = reader.result;
     node.imgEl.src = node.src;
     node.el.classList.add('has-img');
+    window.scheduleSnapshot?.();
     DBG.log('图片载入', node.id, file.name, Math.round(file.size / 1024) + 'KB');
   };
   reader.readAsDataURL(file);
@@ -606,6 +1171,7 @@ function addEdge(source, target) {
   createEdgeLabel(edge);
   redrawEdges();
   DBG.log('创建连线', id, source, '->', target);
+  window.scheduleSnapshot?.();
   return edge;
 }
 
@@ -648,6 +1214,7 @@ function redrawEdges() {
     layoutEdgeLabel(edge);
   }
   drawMiniMap();
+  applyFilter();   // 重画后重新应用层级过滤（淡出非当前层）
 }
 
 function drawGhost(link) {
@@ -730,6 +1297,7 @@ function editEdgeLabel(edge) {
       edge.command = input.value;
       DBG.log('命令更新:', JSON.stringify(edge.command),
               '| 可执行=', edge.command.trim().startsWith(PREFIX));
+      window.scheduleSnapshot?.();
     }
     input.remove();
     label.style.visibility = 'visible';
@@ -903,22 +1471,81 @@ async function streamLLM({ key, promptText, doc, images = [], onDelta }) {
 // =========================================================================
 // 11. 全局运行 / 快捷键
 // =========================================================================
-async function runAll() {
-  const list = Object.values(state.edges);
-  DBG.log('全部运行，共', list.length, '条连线');
-  for (const e of list) await runEdge(e.id);
+// 重执行节点：聚合所有上游节点的内容，按节点内提示词处理
+async function runExecNode(nodeId) {
+  const node = state.nodes[nodeId];
+  if (!node || node.kind !== 'exec') { DBG.warn('非执行节点', nodeId); return; }
+
+  const promptText = (node.prompt || '').trim();
+  if (!promptText) {
+    alert('执行节点还没有填写提示词（双击标题可运行）');
+    return;
+  }
+
+  // 收集所有指向本节点的入边（多输入聚合）
+  const incoming = Object.values(state.edges).filter(e => e.target === nodeId);
+  DBG.log('========== runExecNode', nodeId, '入边数 =', incoming.length, '==========');
+  if (!incoming.length) {
+    DBG.warn('没有任何输入连线');
+    alert('该执行节点还没有上游连线');
+    return;
+  }
+
+  const parts = [];
+  const images = [];
+  incoming.forEach((e, i) => {
+    const src = state.nodes[e.source];
+    if (!src) return;
+    const fromLabel = 'N' + (Object.keys(state.nodes).indexOf(e.source) + 1);
+    if (src.kind === 'img' && src.src) {
+      images.push(src.src);
+      parts.push(`【输入${i + 1} · 来自 ${fromLabel}】[图片]`);
+    } else {
+      parts.push(`【输入${i + 1} · 来自 ${fromLabel}】\n${src.text || '（空）'}`);
+    }
+  });
+  const merged = parts.join('\n\n');
+  DBG.log('聚合输入长度 =', merged.length, '| 图片数 =', images.length);
+
+  const key = document.getElementById('apiKey').value.trim()
+    || localStorage.getItem('deepseek_key') || '';
+  if (!key) { alert('请先填写 DeepSeek API Key'); return; }
+
+  // 清空结果并显示进行中
+  node.text = '';
+  node.textEl.textContent = '思考中…';
+  node.textEl.classList.remove('empty');
+
+  const out = await streamLLM({
+    key, promptText, doc: merged, images,
+    onDelta: (t) => { node.text = t; node.textEl.textContent = t; },
+  });
+  node.text = out;
+  DBG.log('========== runExecNode', nodeId, '完成，输出', out.length, '字 ==========');
 }
 
-// Alt+Enter：运行「当前选中的」或「鼠标悬停的」连线
+async function runAll() {
+  const edges = Object.values(state.edges);
+  const execs = Object.values(state.nodes).filter(n => n.kind === 'exec');
+  DBG.log('全部运行：连线', edges.length, '条，执行节点', execs.length, '个');
+  for (const e of edges) await runEdge(e.id);
+  // 最后跑所有执行节点（它们依赖上游结果）
+  for (const n of execs) await runExecNode(n.id);
+}
+
+// Alt+Enter：优先运行选中/悬停的连线；否则若选中执行节点则运行它
 function runCurrentEdge() {
   let id = state.selectedEdgeId;
   if (!id) {
-    // 找鼠标下的连线
     const hovered = document.querySelectorAll('#edges .wire:hover');
     if (hovered.length) id = hovered[0].dataset.edge;
   }
-  if (!id) { DBG.warn('没有选中/悬停任何连线'); return; }
-  runEdge(id);
+  if (id) { runEdge(id); return; }
+
+  // 没有选中连线：看看有没有选中的执行节点
+  const sel = Object.values(state.nodes).find(n => n.el.classList.contains('selected'));
+  if (sel && sel.kind === 'exec') { runExecNode(sel.id); return; }
+  DBG.warn('没有选中/悬停任何连线或执行节点');
 }
 
 document.addEventListener('keydown', (e) => {
@@ -932,6 +1559,7 @@ document.addEventListener('keydown', (e) => {
       && document.activeElement === document.body) {
     removeEdge(state.selectedEdgeId);
     redrawEdges();
+    window.scheduleSnapshot?.();
   }
 });
 
@@ -1028,6 +1656,230 @@ function bindMiniMapClick() {
 }
 
 // =========================================================================
+// 11.8 画布序列化 —— 让对话能“识别整张图”
+// =========================================================================
+// 把当前画布（节点 + 连线）变成一段结构化文本，喂给模型。
+// 包含：每个节点的类型/标题/内容（图片用占位符）、每条连线的源→目标及命令。
+function serializeCanvas(opts = {}) {
+  const { maxCharsPerNode = 600 } = opts;
+  const nodes = Object.values(state.nodes);
+  const edges = Object.values(state.edges);
+
+  // 给节点一个可读的稳定编号：按位置从左到右、从上到下排序
+  const sorted = [...nodes].sort((a, b) => (a.x - b.x) || (a.y - b.y));
+  const labelOf = new Map();
+  sorted.forEach((n, i) => labelOf.set(n.id, 'N' + (i + 1)));
+
+  const lines = [];
+  lines.push('【画布结构】');
+
+  // 区域（= 大纲层级单位）
+  const zones = Object.values(state.zones);
+  if (zones.length) {
+    lines.push('区域（大纲层级，' + zones.length + ' 个）：');
+    for (const z of zones) {
+      const cnt = Object.values(state.nodes).filter(n => n.zoneId === z.id).length;
+      lines.push(`- ${z.title}（${cnt} 个节点）`);
+    }
+  }
+
+  lines.push('节点（' + nodes.length + ' 个）：');
+  for (const n of sorted) {
+    const tag = labelOf.get(n.id);
+    const kind = { doc: '文档', output: '输出', img: '图片', exec: '执行' }[n.kind] || n.kind;
+    const zoneName = n.zoneId && state.zones[n.zoneId] ? state.zones[n.zoneId].title : '未分类';
+    let content;
+    if (n.kind === 'img') {
+      content = n.src ? '[图片]' : '[空图片]';
+    } else if (n.kind === 'exec') {
+      const p = (n.prompt || '').trim();
+      const r = (n.text || '').trim();
+      content = '提示词=' + (p ? JSON.stringify(p) : '(空)') +
+                ' 结果=' + (r ? '"' + (r.length > maxCharsPerNode ? r.slice(0, maxCharsPerNode) + '…' : r) + '"' : '(空)');
+    } else {
+      const t = (n.text || '').trim();
+      content = t ? '"' + (t.length > maxCharsPerNode ? t.slice(0, maxCharsPerNode) + '…(已截断)' : t) + '"' : '(空)';
+    }
+    lines.push(`- ${tag} [${kind}] 区域=${JSON.stringify(zoneName)} 标题=${JSON.stringify(n.title)} ${content}`);
+  }
+
+  lines.push('连线（' + edges.length + ' 条）：');
+  if (!edges.length) lines.push('- （无）');
+  for (const e of edges) {
+    const from = labelOf.get(e.source) || e.source;
+    const to   = labelOf.get(e.target) || e.target;
+    const cmd  = (e.command || '').trim();
+    const exec = cmd.startsWith(PREFIX) ? cmd.slice(PREFIX.length).trim() : '';
+    lines.push(`- ${from} → ${to} 命令=${exec ? JSON.stringify(exec) : '(无，不执行)'}`);
+  }
+  return lines.join('\n');
+}
+
+// 收集画布上所有有内容的图片（dataURL），供视觉模型识别
+function collectCanvasImages() {
+  return Object.values(state.nodes)
+    .filter(n => n.kind === 'img' && n.src)
+    .map(n => ({ id: n.id, title: n.title, src: n.src }));
+}
+
+// 刷新侧边栏顶部的“快照预览”
+function refreshSnapshot() {
+  const text = serializeCanvas();
+  const pre = document.getElementById('snapText');
+  if (pre) pre.textContent = text;
+  const chip = document.getElementById('ctxChip');
+  if (chip) chip.textContent = '上下文：' + Object.keys(state.nodes).length + ' 节点 / '
+    + Object.keys(state.edges).length + ' 连线';
+
+  const thumbs = document.getElementById('snapThumbs');
+  if (thumbs) {
+    thumbs.innerHTML = '';
+    for (const im of collectCanvasImages()) {
+      const el = document.createElement('img');
+      el.src = im.src; el.title = im.title;
+      thumbs.appendChild(el);
+    }
+  }
+  DBG.log('画布快照已刷新');
+}
+
+// =========================================================================
+// 11.9 侧边栏对话
+// =========================================================================
+const chat = { messages: [], busy: false };
+
+function addMsg(role, text, meta) {
+  const box = document.getElementById('msgs');
+  const el = document.createElement('div');
+  el.className = 'msg ' + role;
+  if (meta) {
+    const m = document.createElement('span');
+    m.className = 'meta'; m.textContent = meta;
+    el.appendChild(m);
+  }
+  el.appendChild(document.createTextNode(text));
+  box.appendChild(el);
+  box.scrollTop = box.scrollHeight;
+  return el;
+}
+
+// 发送消息：自动把画布快照(+可选图片)拼入上下文
+async function sendChat() {
+  if (chat.busy) return;
+  const input = document.getElementById('chatInput');
+  const userText = input.value.trim();
+  if (!userText) return;
+  const key = document.getElementById('apiKey').value.trim()
+    || localStorage.getItem('deepseek_key') || '';
+  if (!key) { alert('请先填写 DeepSeek API Key'); return; }
+
+  const withImages = document.getElementById('includeImages').checked;
+  const snapshot = serializeCanvas();
+  const images = withImages ? collectCanvasImages() : [];
+
+  // 记录并显示用户消息
+  chat.messages.push({ role: 'user', text: userText });
+  addMsg('user', userText, '我');
+  input.value = '';
+
+  // 构建请求：system 给角色与画布上下文；之后是历史消息
+  const systemText =
+    '你是一个能看画布的助手。下面是用户当前的画布（节点与连线）：\n\n' +
+    snapshot + '\n\n' +
+    '规则：\n' +
+    '1. 回答时必须基于上述画布内容；提到节点时用 N1/N2 这样的编号。\n' +
+    '2. 若消息中附带了图片，请直接识别图片内容（不要说你无法看到图片）。\n' +
+    '3. 回答简洁、准确，用中文。';
+
+  // 历史消息（只带文本），最新一条附上图片
+  const history = chat.messages.map(m => ({
+    role: m.role, content: m.text,
+  }));
+  if (images.length) {
+    // 把最后一条 user 消息改成多模态
+    const last = history[history.length - 1];
+    last.content = [
+      { type: 'text', text: last.content + '\n\n（下面是画布上的图片，请结合它们回答）' },
+      ...images.map(im => ({ type: 'image_url', image_url: { url: im.src } })),
+    ];
+  }
+
+  const payload = {
+    model: 'deepseek-chat',
+    stream: true,
+    temperature: 0.3,
+    messages: [{ role: 'system', content: systemText }, ...history],
+  };
+
+  DBG.lastRequest = payload;
+  DBG.log('对话请求', { 节点数: Object.keys(state.nodes).length, 图片数: images.length });
+
+  chat.busy = true;
+  const btn = document.getElementById('sendMsg');
+  btn.disabled = true;
+  const bubble = addMsg('assistant', '', '助手');
+  bubble.textContent = '…';
+
+  let full = '';
+  try {
+    const res = await fetch(API_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + key },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) throw new Error('HTTP ' + res.status + ' ' + (await res.text()));
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop();
+      for (const s0 of lines) {
+        const s = s0.trim();
+        if (!s.startsWith('data:')) continue;
+        const p = s.slice(5).trim();
+        if (p === '[DONE]') continue;
+        try {
+          const j = JSON.parse(p);
+          const d = j.choices?.[0]?.delta?.content || '';
+          if (d) { full += d; bubble.textContent = full; }
+        } catch {}
+      }
+    }
+    chat.messages.push({ role: 'assistant', text: full });
+    DBG.log('对话完成，', full.length, '字');
+  } catch (err) {
+    DBG.err('对话失败:', err);
+    bubble.className = 'msg error';
+    bubble.textContent = '❌ ' + err.message;
+  } finally {
+    chat.busy = false;
+    btn.disabled = false;
+    document.getElementById('msgs').scrollTop = 1e9;
+  }
+}
+
+function bindSidebar() {
+  document.getElementById('sendMsg').addEventListener('click', sendChat);
+  document.getElementById('chatInput').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendChat(); }
+  });
+  document.getElementById('clearChat').addEventListener('click', () => {
+    chat.messages = [];
+    document.getElementById('msgs').innerHTML = '';
+    DBG.log('对话已清空');
+  });
+  document.getElementById('toggleSidebar').addEventListener('click', () => {
+    document.getElementById('sidebar').classList.toggle('collapsed');
+    // 布局变化后要重画（画布宽度改变会影响连线坐标）
+    requestAnimationFrame(() => { redrawEdges(); drawMiniMap(); });
+  });
+}
+
+// =========================================================================
 // 12. 初始化
 // =========================================================================
 function init() {
@@ -1044,7 +1896,15 @@ function init() {
     createNode('output', { x: 560, y: 120 }));
   document.getElementById('addImg').addEventListener('click', () =>
     createNode('img', { x: 560, y: 340 }));
+  document.getElementById('addExec').addEventListener('click', () =>
+    createNode('exec', { x: 300, y: 420 }));
+  document.getElementById('addZone').addEventListener('click', () =>
+    createZone({}));
   document.getElementById('runAll').addEventListener('click', runAll);
+  document.getElementById('toggleOutline').addEventListener('click', () => {
+    document.getElementById('outline').classList.toggle('collapsed');
+    requestAnimationFrame(() => { redrawEdges(); drawMiniMap(); });
+  });
 
   // ---- 视口控件 ----
   document.getElementById('zoomIn').addEventListener('click', () => {
@@ -1065,6 +1925,14 @@ function init() {
     drawMiniMap();
   });
   bindMiniMapClick();
+  bindSidebar();
+
+  // 画布变化时自动刷新侧边栏快照（节流，避免拖拽时每帧重绘）
+  let snapTimer = null;
+  window.scheduleSnapshot = () => {
+    clearTimeout(snapTimer);
+    snapTimer = setTimeout(refreshSnapshot, 250);
+  };
 
   // ---- 画布平移：空白处拖拽 或 空格+拖拽 ----
   const canvas = document.getElementById('canvas');
@@ -1115,9 +1983,21 @@ function init() {
   // 初始视图：适应全部内容，一眼看到整张图
   applyView();
   fitToContent();
+  refreshSnapshot();                    // 同步画布快照到侧边栏
+  refreshOutline();                     // 初始化大纲
+  refreshLevelFilter();                 // 初始化层级过滤器
+  addMsg('assistant',
+    '你好，我能看到你当前的画布。可以问我：\n- 「概括当前图的结构」\n- 「N1 的内容讲了什么？」\n- 上传图片后「描述画布上的图片」',
+    '助手');
+
+  // 布局变化后重算连线（侧边栏折叠/展开、窗口尺寸变化）
+  if (window.ResizeObserver) {
+    new ResizeObserver(() => { redrawEdges(); drawMiniMap(); })
+      .observe(document.getElementById('canvasWrap'));
+  }
 
   window.addEventListener('resize', () => { redrawEdges(); drawMiniMap(); });
-  DBG.log('初始化完成。Alt+Enter 运行；滚轮缩放；空白处拖拽平移；右下角小地图总览。');
+  DBG.log('初始化完成。对话栏可读取整张画布；Alt+Enter 运行连线/执行节点；区域=大纲层级。');
 }
 
 init();
