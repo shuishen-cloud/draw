@@ -165,12 +165,12 @@ export function renderNode(node) {
 
   // 移动 + 选中
   const bar = el.querySelector('.bar');
-  bar.addEventListener('mousedown', (e) => {
+  bar.addEventListener('pointerdown', (e) => {
     if (e.target.classList.contains('close')) return;
     selectNode(node.id);
     startDrag(e, node);
   });
-  el.addEventListener('mousedown', () => selectNode(node.id));
+  el.addEventListener('pointerdown', () => selectNode(node.id));
 
   // 删除节点
   el.querySelector('.close').addEventListener('click', (e) => {
@@ -181,26 +181,26 @@ export function renderNode(node) {
   });
 
   // 尾部端口：从这里拖出连线
-  el.querySelector('.port.out').addEventListener('mousedown', (e) => {
+  el.querySelector('.port.out').addEventListener('pointerdown', (e) => {
     e.stopPropagation(); e.preventDefault();
     startLinkFrom(node, e);
   });
   // 头部端口：可在此结束连线（也支持直接落在节点上）
-  el.querySelector('.port.in').addEventListener('mouseup', (e) => {
+  el.querySelector('.port.in').addEventListener('pointerup', (e) => {
     e.stopPropagation();
     finishLinkTo(node);
   });
-  el.addEventListener('mouseup', () => finishLinkTo(node));
+  el.addEventListener('pointerup', () => finishLinkTo(node));
 
   // 缩放手柄
-  el.querySelector('.resize-handle').addEventListener('mousedown', (e) => {
+  el.querySelector('.resize-handle').addEventListener('pointerdown', (e) => {
     e.stopPropagation(); e.preventDefault();
     startResize(e, node);
   });
 
   // 区域选择器：手动指定节点归属哪个区域（大纲章节）
   const pick = el.querySelector('.zone-pick');
-  pick.addEventListener('mousedown', (e) => e.stopPropagation());
+  pick.addEventListener('pointerdown', (e) => e.stopPropagation());
   pick.addEventListener('change', () => {
     node.zoneId = pick.value || null;
     DBG.log('节点', node.id, '归属区域 ->', node.zoneId);
@@ -274,12 +274,12 @@ export function startDrag(e, node) {
     redrawEdges();
   }
   function onUp() {
-    window.removeEventListener('mousemove', onMove);
-    window.removeEventListener('mouseup', onUp);
+    window.removeEventListener('pointermove', onMove);
+    window.removeEventListener('pointerup', onUp);
     window.scheduleSnapshot?.();   // 拖动结束保存位置
   }
-  window.addEventListener('mousemove', onMove);
-  window.addEventListener('mouseup', onUp);
+  window.addEventListener('pointermove', onMove);
+  window.addEventListener('pointerup', onUp);
 }
 
 // =========================================================================
@@ -297,12 +297,12 @@ export function startResize(e, node) {
     layoutEdgeLabel(node);      // 若此节点是端点，标签位置也要更新
   }
   function onUp() {
-    window.removeEventListener('mousemove', onMove);
-    window.removeEventListener('mouseup', onUp);
+    window.removeEventListener('pointermove', onMove);
+    window.removeEventListener('pointerup', onUp);
     window.scheduleSnapshot?.();   // 缩放结束保存尺寸
   }
-  window.addEventListener('mousemove', onMove);
-  window.addEventListener('mouseup', onUp);
+  window.addEventListener('pointermove', onMove);
+  window.addEventListener('pointerup', onUp);
 }
 
 // =========================================================================

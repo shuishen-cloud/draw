@@ -116,7 +116,7 @@ function init() {
   let spaceDown = false;
   document.addEventListener('keydown', (e) => { if (e.code === 'Space') spaceDown = true; });
   document.addEventListener('keyup',   (e) => { if (e.code === 'Space') spaceDown = false; });
-  canvas.addEventListener('mousedown', (e) => {
+  canvas.addEventListener('pointerdown', (e) => {
     const onBlank = e.target.id === 'canvas' || e.target.id === 'world' || e.target.id === 'edges';
     if (!onBlank && !spaceDown) return;
     if (e.button !== 0) return;
@@ -125,11 +125,11 @@ function init() {
     function onMove(ev) { view.x = ox + (ev.clientX - sx); view.y = oy + (ev.clientY - sy); applyView(); }
     function onUp() {
       canvas.classList.remove('panning');
-      window.removeEventListener('mousemove', onMove);
-      window.removeEventListener('mouseup', onUp);
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
     }
-    window.addEventListener('mousemove', onMove);
-    window.addEventListener('mouseup', onUp);
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onUp);
   });
 
   // ---- 滚轮缩放 ----
@@ -138,8 +138,39 @@ function init() {
     zoomAt(e.clientX, e.clientY, e.deltaY < 0 ? 1.1 : 1 / 1.1);
   }, { passive: false });
 
+  // ---- 触摸双指缩放（平板/手机）----
+  const touches = new Map();   // pointerId -> {x, y}
+  let pinchDist = 0;
+  canvas.addEventListener('pointerdown', (e) => {
+    if (e.pointerType === 'mouse') return;
+    touches.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (touches.size === 2) {
+      const [a, b] = [...touches.values()];
+      pinchDist = Math.hypot(a.x - b.x, a.y - b.y);
+    }
+  });
+  canvas.addEventListener('pointermove', (e) => {
+    if (e.pointerType === 'mouse' || !touches.has(e.pointerId)) return;
+    touches.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (touches.size === 2 && pinchDist > 0) {
+      const [a, b] = [...touches.values()];
+      const d = Math.hypot(a.x - b.x, a.y - b.y);
+      if (d > 0) {
+        const cx = (a.x + b.x) / 2, cy = (a.y + b.y) / 2;
+        zoomAt(cx, cy, d / pinchDist);
+        pinchDist = d;
+      }
+    }
+  });
+  const endTouch = (e) => {
+    touches.delete(e.pointerId);
+    if (touches.size < 2) pinchDist = 0;
+  };
+  canvas.addEventListener('pointerup', endTouch);
+  canvas.addEventListener('pointercancel', endTouch);
+
   // 点击空白处取消选中
-  canvas.addEventListener('mousedown', (e) => {
+  canvas.addEventListener('pointerdown', (e) => {
     if (e.target.id === 'canvas' || e.target.id === 'world' || e.target.id === 'edges') {
       state.selectedEdgeId = null;
       Object.values(state.nodes).forEach(n => n.el.classList.remove('selected'));
@@ -179,6 +210,14 @@ function init() {
   }
 
   window.addEventListener('resize', () => { redrawEdges(); drawMiniMap(); });
+
+  // ---- 移动端/窄屏：默认折叠两侧栏，画布占满屏幕 ----
+  if (window.matchMedia('(max-width: 768px)').matches) {
+    document.getElementById('outline').classList.add('collapsed');
+    document.getElementById('sidebar').classList.add('collapsed');
+    requestAnimationFrame(() => { redrawEdges(); drawMiniMap(); });
+  }
+
   DBG.log('初始化完成。左侧：大纲/任务；Alt+Enter 运行；区域=大纲层级。');
 }
 

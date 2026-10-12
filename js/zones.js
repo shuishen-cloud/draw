@@ -60,7 +60,7 @@ export function renderZone(zone) {
   bar.style.background = zone.color;
 
   // 拖动区域
-  bar.addEventListener('mousedown', (e) => {
+  bar.addEventListener('pointerdown', (e) => {
     if (e.target.classList.contains('zone-close')) return;
     e.stopPropagation();
     const sx = e.clientX, sy = e.clientY, ox = zone.x, oy = zone.y;
@@ -78,12 +78,12 @@ export function renderZone(zone) {
       redrawEdges();
     }
     function onUp() {
-      window.removeEventListener('mousemove', onMove2);
-      window.removeEventListener('mouseup', onUp);
+      window.removeEventListener('pointermove', onMove2);
+      window.removeEventListener('pointerup', onUp);
       window.scheduleSnapshot?.();   // 区域拖动结束保存
     }
-    window.addEventListener('mousemove', onMove2);
-    window.addEventListener('mouseup', onUp);
+    window.addEventListener('pointermove', onMove2);
+    window.addEventListener('pointerup', onUp);
   });
 
   el.querySelector('.zone-close').addEventListener('click', (e) => {
@@ -92,7 +92,7 @@ export function renderZone(zone) {
   });
 
   // 缩放手柄
-  el.querySelector('.zone-resize').addEventListener('mousedown', (e) => {
+  el.querySelector('.zone-resize').addEventListener('pointerdown', (e) => {
     e.stopPropagation(); e.preventDefault();
     const sx = e.clientX, sy = e.clientY, ow = zone.w, oh = zone.h;
     function onMove(ev) {
@@ -101,12 +101,12 @@ export function renderZone(zone) {
       layoutZone(zone);
     }
     function onUp() {
-      window.removeEventListener('mousemove', onMove);
-      window.removeEventListener('mouseup', onUp);
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
       window.scheduleSnapshot?.();   // 区域缩放结束保存
     }
-    window.addEventListener('mousemove', onMove);
-    window.addEventListener('mouseup', onUp);
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onUp);
   });
 
   // 双击标题改名

@@ -10,7 +10,7 @@
     font-family: system-ui, -apple-system, "Segoe UI", "PingFang SC", sans-serif; }
   body { background: var(--bg); }
 
-  #canvas { position: absolute; inset: 0; overflow: hidden; cursor: default; }
+  #canvas { position: absolute; inset: 0; overflow: hidden; cursor: default; touch-action: none; }
   #canvas.panning { cursor: grabbing; }
 
   /* 布局：画布区 + 右侧侧边栏（flex） */
@@ -426,3 +426,52 @@
     pointer-events: none;
   }
   #toast.show { opacity: .95; }
+
+/* =========================================================================
+   移动端 / 平板适配（窄屏时侧栏改为浮层抽屉，画布全屏）
+   ========================================================================= */
+@media (max-width: 768px) {
+  /* 侧栏脱离文档流，浮在画布上 */
+  #outline, #sidebar {
+    position: absolute; top: 0; bottom: 0; z-index: 50;
+    width: min(78vw, 320px);
+    box-shadow: 0 0 24px rgba(0,0,0,.18);
+    transition: transform .22s ease;
+  }
+  #outline { left: 0; transform: translateX(0); border-right: 1px solid var(--border); }
+  #sidebar { right: 0; transform: translateX(0); border-left: 1px solid var(--border); }
+
+  /* 折叠 = 移出屏幕（保留宽度，便于动画） */
+  #outline.collapsed, #sidebar.collapsed {
+    flex-basis: min(78vw, 320px); width: min(78vw, 320px);
+    border: 0; overflow: visible;
+  }
+  #outline.collapsed { transform: translateX(-102%); }
+  #sidebar.collapsed { transform: translateX(102%); }
+  /* 移动端折叠时仍显示内部内容（只是整体移出屏幕） */
+  #outline.collapsed .ol-body, #outline.collapsed .ol-head,
+  #sidebar.collapsed .sb-body, #sidebar.collapsed .sb-head { display: flex; }
+  #outline.collapsed .ol-body, #sidebar.collapsed .sb-body { display: block; }
+
+  /* 工具栏：缩小、允许换行、贴左上角 */
+  #toolbar { flex-wrap: wrap; gap: 4px; padding: 6px; max-width: calc(100vw - 16px); }
+  #toolbar button { font-size: 12px; padding: 6px 8px; }
+
+  /* 节点内的端口/手柄加大，方便手指点中 */
+  .port { width: 18px; height: 18px; }
+
+  /* 小地图在窄屏隐藏（避免遮挡） */
+  #minimap { display: none !important; }
+
+  /* 输入框加大，防止 iOS 自动放大 */
+  textarea, input, select { font-size: 16px; }
+}
+
+/* 触摸设备：禁用长按选择/系统菜单，提升拖动体验 */
+@media (pointer: coarse) {
+  .node, .zone, .port, .resize-handle, .zone-resize {
+    -webkit-user-select: none; user-select: none;
+    -webkit-touch-callout: none;
+  }
+  .port { touch-action: none; }
+}

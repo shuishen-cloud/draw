@@ -22,8 +22,8 @@ export function startLinkFrom(node, e) {
     drawGhost(linkState.pending);
   }
   function onUp(ev) {
-    window.removeEventListener('mousemove', onMove);
-    window.removeEventListener('mouseup', onUp);
+    window.removeEventListener('pointermove', onMove);
+    window.removeEventListener('pointerup', onUp);
     // 若松开时落在某个节点上，则正式建边
     const target = findNodeAt(ev.clientX, ev.clientY);
     linkState.pending = null;
@@ -34,8 +34,8 @@ export function startLinkFrom(node, e) {
       DBG.log('连线取消（未落在有效节点上）');
     }
   }
-  window.addEventListener('mousemove', onMove);
-  window.addEventListener('mouseup', onUp);
+  window.addEventListener('pointermove', onMove);
+  window.addEventListener('pointerup', onUp);
 }
 
 export function finishLinkTo(node) {

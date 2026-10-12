@@ -77,7 +77,7 @@ export function drawMiniMap() {
 // 点击小地图跳转视口
 export function bindMiniMapClick() {
   const map = document.getElementById('minimap');
-  map.addEventListener('mousedown', (e) => {
+  map.addEventListener('pointerdown', (e) => {
     const cv = map.querySelector('canvas');
     const r = cv.getBoundingClientRect();
     const px = e.clientX - r.left, py = e.clientY - r.top;

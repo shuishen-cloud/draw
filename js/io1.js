@@ -84,24 +84,46 @@ export async function importFiles(files) {
 }
 
 // 从 URL 抓取
+//  - 本地服务（http）打开时，走 /proxy（node server.js）
+//  - 单文件离线版（file://）打开时，回退到公共 CORS 代理（需联网）
 export async function importFromUrl(url) {
   if (!url) url = prompt('输入要引入的网页地址：', 'https://');
   if (!url || !/^https?:\/\//.test(url)) return;
   DBG.log('抓取 URL', url);
   const spot = findFreeSpot();
   const node = createNode('doc', { x: spot.x, y: spot.y, title: '加载中…', text: '正在抓取 ' + url + ' …' });
+
+  // 离线（file://）时没有本地代理，用公共代理兜底
+  const offline = location.protocol === 'file:';
+  const proxy = offline
+    ? 'https://r.jina.ai/' + url                 // 公共阅读代理，返回网页正文文本
+    : '/proxy?url=' + encodeURIComponent(url);
+
   try {
-    const res = await fetch('/proxy?url=' + encodeURIComponent(url));
-    const data = await res.json();
-    if (data.error) throw new Error(data.error);
-    node.title = (data.title || url).slice(0, 60);
-    node.el.querySelector('.title').textContent = node.title;
-    node.text = `【来源】${data.url}\n\n${data.text}`;
-    node.textEl.value = node.text;
+    const res = await fetch(proxy);
+    if (offline) {
+      // r.jina.ai 返回纯文本
+      const text = await res.text();
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      node.title = (text.split('\n').find(l => l.trim()) || url).slice(0, 60);
+      node.el.querySelector('.title').textContent = node.title;
+      node.text = `【来源】${url}\n\n${text}`;
+      node.textEl.value = node.text;
+    } else {
+      const data = await res.json();
+      if (data.error) throw new Error(data.error);
+      node.title = (data.title || url).slice(0, 60);
+      node.el.querySelector('.title').textContent = node.title;
+      node.text = `【来源】${data.url}\n\n${data.text}`;
+      node.textEl.value = node.text;
+    }
     DBG.log('抓取成功', node.title, node.text.length, '字');
     redrawEdges(); refreshOutline(); window.scheduleSnapshot?.();
   } catch (e) {
-    node.text = '❌ 抓取失败：' + e.message + '\n（请确认本地服务已启动：node server.js）';
+    const hint = offline
+      ? '❌ 抓取失败：' + e.message + '\n（离线单文件版需联网，且依赖公共代理 r.jina.ai；或改用「本地服务」方式打开）'
+      : '❌ 抓取失败：' + e.message + '\n（请确认本地服务已启动：node server.js）';
+    node.text = hint;
     node.textEl.value = node.text;
     DBG.err('抓取失败', e);
   }
