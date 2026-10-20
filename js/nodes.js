@@ -97,7 +97,9 @@ export function renderNode(node) {
     body.appendChild(img);
     body.appendChild(drop);
     node.imgEl = img;
-    el.addEventListener('click', () => {
+    // 选图只绑在图片内容区：绑到整个节点时，点标题栏的分类下拉/删除
+    // 也会冒泡到这里，误弹出文件选择器。
+    body.addEventListener('click', () => {
       const inp = document.createElement('input');
       inp.type = 'file'; inp.accept = 'image/*';
       inp.onchange = () => inp.files[0] && loadImageFile(node, inp.files[0]);
@@ -205,6 +207,8 @@ export function renderNode(node) {
   // 区域选择器：手动指定节点归属哪个区域（大纲章节）
   const pick = el.querySelector('.zone-pick');
   pick.addEventListener('pointerdown', (e) => e.stopPropagation());
+  // 阻止冒泡到节点/内容区，否则图片节点会误触发选图
+  pick.addEventListener('click', (e) => e.stopPropagation());
   pick.addEventListener('change', () => {
     node.zoneId = pick.value || null;
     DBG.log('节点', node.id, '归属区域 ->', node.zoneId);
@@ -239,6 +243,13 @@ export function renderNode(node) {
   worldEl().appendChild(el);   // 节点进入 world 坐标系
   node.el = el;
   refreshZonePicker(node);     // 初始化下拉选项
+
+  // 文本类节点默认进入预览（打开即看到渲染效果）；图片节点无文本，保持编辑。
+  // 注意：必须在 node.el 赋值之后调用，setNodeMode 依赖 node.el。
+  if (node.kind !== 'img') {
+    setNodeMode(node, 'preview');
+    DBG.log('默认预览', node.id);
+  }
 }
 
 // 刷新单个节点的区域下拉选项（区域增删后调用）

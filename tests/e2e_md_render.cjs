@@ -107,6 +107,8 @@ const MD = [
     const n = createNode('doc', { x: 30, y: 30, w: 320, h: 260 });
     n.textEl.value = src;
     n.text = src;
+    // 节点现在默认进入预览态；本段考察「从编辑态切换到预览」，故显式切回编辑。
+    setNodeMode(n, 'edit');
     view.scale = 1; view.x = 0; view.y = 0; applyView();
     return { id: n.id };
   }, MD);

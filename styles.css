@@ -452,7 +452,9 @@
     position: absolute; left: 16px; bottom: 16px; z-index: 20;
     display: flex; gap: 8px; align-items: center; flex-wrap: wrap;
     background: #fff; padding: 8px 10px; border-radius: 12px;
-    box-shadow: 0 3px 16px rgba(0,0,0,.12); font-size: 13px; max-width: calc(100% - 32px);
+    box-shadow: 0 3px 16px rgba(0,0,0,.12); font-size: 13px;
+    /* 为右侧 #viewctl 让出空间，否则窄屏下会重叠并遮住缩放按钮 */
+    max-width: calc(100% - 32px - 260px);
   }
   button {
     border: 0; border-radius: 8px; padding: 7px 13px; font-size: 13px;
@@ -465,7 +467,9 @@
     padding: 7px 9px; border: 1px solid #d5d7db; border-radius: 8px;
     font-size: 13px; width: 230px;
   }
-  #hint { color: #777; font-size: 12px; line-height: 1.5; }
+  /* 纯说明文字，不参与交互：它覆盖在工具栏上方，
+     默认会被命中并拦住按钮的指针事件。 */
+  #hint { color: #777; font-size: 12px; line-height: 1.5; pointer-events: none; }
   kbd {
     background: #f0f1f3; border: 1px solid #d5d7db; border-bottom-width: 2px;
     border-radius: 4px; padding: 0 5px; font-size: 11px; font-family: inherit;
@@ -473,7 +477,7 @@
 
   /* 右下角视图控件 */
   #viewctl {
-    position: absolute; right: 16px; bottom: 16px; z-index: 20;
+    position: absolute; right: 16px; bottom: 16px; z-index: 22;   /* 高于 #toolbar(20)，避免被其遮盖 */
     display: flex; gap: 6px; align-items: center;
     background: #fff; padding: 6px; border-radius: 10px;
     box-shadow: 0 3px 16px rgba(0,0,0,.12);
@@ -598,6 +602,10 @@
   /* 工具栏：缩小、允许换行、贴左上角 */
   #toolbar { flex-wrap: wrap; gap: 4px; padding: 6px; max-width: calc(100vw - 16px); }
   #toolbar button { font-size: 12px; padding: 6px 8px; }
+  /* 窄屏：视图控件缩小并上移，给工具栏留出底部空间，避免重叠遮挡 */
+  #viewctl { bottom: auto; top: 56px; right: 8px; padding: 4px; gap: 4px; }
+  #viewctl button { padding: 5px 7px; font-size: 11px; }
+  #zoomLabel { min-width: 34px; font-size: 11px; }
 
   /* 节点内的端口/手柄加大，方便手指点中；边框条带也加宽 */
   .port { width: 18px; height: 18px; opacity: 1; }

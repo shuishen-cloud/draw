@@ -11,7 +11,7 @@ import { createNode } from './nodes.js';
 import { refreshLevelFilter, refreshOutline } from './outline.js';
 import { runAll } from './run.js';
 import { createTask, loadTasks, refreshTasks, switchOlTab } from './tasks.js';
-import { applyView, canvasEl, fitToContent, zoomAt } from './viewport.js';
+import { applyView, canvasEl, centerContent, fitToContent, zoomAt } from './viewport.js';
 import { createZone } from './zones.js';
 
 // 12. 初始化
@@ -81,18 +81,26 @@ function init() {
   });
 
   // ---- 视口控件 ----
+  // 缩放锚点统一取「可见容器中心」：
+  // #canvas 是绝对定位的全屏层，侧栏占位后它的中心并不在可见区中心，
+  // 用它当锚点会让节点在放大后跑出视野。
+  const viewCenter = () => {
+    const r = document.getElementById('canvasWrap').getBoundingClientRect();
+    return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+  };
   document.getElementById('zoomIn').addEventListener('click', () => {
-    const r = canvasEl().getBoundingClientRect();
-    zoomAt(r.left + r.width / 2, r.top + r.height / 2, 1.2);
+    const c = viewCenter();
+    zoomAt(c.x, c.y, 1.2);
   });
   document.getElementById('zoomOut').addEventListener('click', () => {
-    const r = canvasEl().getBoundingClientRect();
-    zoomAt(r.left + r.width / 2, r.top + r.height / 2, 1 / 1.2);
+    const c = viewCenter();
+    zoomAt(c.x, c.y, 1 / 1.2);
   });
   document.getElementById('fit').addEventListener('click', () => fitToContent());
   document.getElementById('reset1').addEventListener('click', () => {
-    const r = canvasEl().getBoundingClientRect();
-    zoomAt(r.left + r.width / 2, r.top + r.height / 2, 1 / view.scale);
+    // 「100% 居中」：缩放到 1.0 并把内容居中到可见区
+    view.scale = 1;
+    centerContent();
   });
   document.getElementById('toggleMap').addEventListener('click', () => {
     document.getElementById('minimap').classList.toggle('hidden');
@@ -181,11 +189,19 @@ function init() {
   // 优先从本地恢复上次画布；没有则创建示例
   const restored = restoreCanvas();
   if (!restored) {
-    const a = createNode('doc', { x: 100, y: 140, title: '文档',
-      text: '人工智能正在改变世界。大语言模型可以写代码、做翻译、回答问题、总结长文。' +
-            '它们通过海量文本训练，学会了语言的统计规律。在实际应用中，人们常常需要把长文档压缩成要点，' +
-            '或者提炼出核心结论，以便快速阅读和决策。' });
-    const b = createNode('output', { x: 620, y: 140, title: '输出' });
+    const a = createNode('doc', { x: 100, y: 140, title: '文档', w: 340, h: 260,
+      text: [
+        '# 人工智能',
+        '',
+        '大语言模型可以：',
+        '',
+        '- 写代码',
+        '- 做翻译',
+        '- **总结**长文',
+        '',
+        '> 它们从海量文本中学会了语言的统计规律。',
+      ].join('\n') });
+    const b = createNode('output', { x: 560, y: 140, title: '输出' });
     const e1 = addEdge(a.id, b.id);
     e1.command = '🖐️总结';
     layoutEdgeLabel(e1);

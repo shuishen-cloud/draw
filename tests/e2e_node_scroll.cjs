@@ -80,6 +80,8 @@ const LONG = '这是一行比较长的内容，用来测试滚动栏是否正常
     const out = createNode('output', { x: 40, y: 280, w: 300, h: 200 });
     const exec = createNode('exec', { x: 40, y: 520, w: 320, h: 260 });
     const img = createNode('img', { x: 400, y: 40, w: 240, h: 200 });
+    // 本套测试考察「编辑态」的滚动行为；节点默认是预览态，显式切回。
+    for (const n of [doc, out, exec]) setNodeMode(n, 'edit');
     applyView();
     return { doc: doc.id, out: out.id, exec: exec.id, img: img.id };
   });
