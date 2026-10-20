@@ -92,4 +92,76 @@ Expires: 0                # 同上
 
 ## 6. 实现与校验结果
 
-（close 阶段回填）
+### 6.1 改动
+
+```js
+// 本地开发服务器：明确禁止缓存
+const NO_CACHE = {
+  'Cache-Control': 'no-store, must-revalidate',
+  'Pragma': 'no-cache',
+  'Expires': '0',
+};
+```
+
+应用位置：
+
+```js
+// 静态文件 200
+res.writeHead(200, { 'Content-Type': MIME[ext] || 'application/octet-stream', ...NO_CACHE });
+// 404
+res.writeHead(404, { ...NO_CACHE, 'Content-Type': 'text/plain; charset=utf-8' });
+// /proxy 的 400 / 200 / 502
+res.writeHead(200, { ...cors, ...NO_CACHE, 'Content-Type': 'application/json; charset=utf-8' });
+```
+
+### 6.2 校验结果（实测）
+
+```
+$ node tests/e2e_dev_cache.cjs
+[1] 静态 JS 响应头    ✔ 200  ✔ no-store+must-revalidate  ✔ pragma  ✔ expires
+[2] 其它静态资源       ✔ /  ✔ /styles.css  ✔ /js/md.js  ✔ /js/geom.js
+[3] 404               ✔ 404  ✔ 带 no-store
+[4] 内容即时性         ✔ 改文件后立即返回新内容  ✔ 还原后恢复
+[5] 两次请求           ✔ 内容相同  ✔ 都带 no-store
+[6] proxy             ✔ 带 no-store
+结果：15 通过，0 失败
+```
+
+边界情况（临时脚本验证）：
+
+```
+OPTIONS /proxy        -> 204  cc=-                              （空响应，无需头）
+HEAD /js/main.js      -> 200  cc=no-store, must-revalidate
+GET /../etc/passwd    -> 404  cc=no-store, must-revalidate      （路径穿越被拦）
+GET /js/md.js?x=1     -> 200  cc=no-store, must-revalidate      （带查询参数正常）
+```
+
+全量回归（212 项）：
+
+```
+tests/test_geom.mjs         → 12 passed
+tests/test_zone.mjs         → 12 passed
+tests/test_md.mjs           → 21 passed
+tests/e2e_node_scroll.cjs   → 21 通过
+tests/e2e_md_render.cjs     → 45 通过
+tests/e2e_touch_link.cjs    → 17 通过
+tests/e2e_port_clash.cjs    → 16 通过
+tests/e2e_ux_fixes.cjs      → 21 通过
+tests/e2e_zone_auto.cjs     → 32 通过
+tests/e2e_dev_cache.cjs     → 15 通过
+```
+
+### 6.3 重要：需重启服务
+
+响应头是进程级配置，已运行的 `node server.js` 不会自动生效：
+
+```bash
+# 杀掉旧进程后重启
+pkill -f "node server.js" && node server.js
+```
+
+### 6.4 遗留
+
+- **不影响生产部署**：容器内走 nginx（`Dockerfile` + `deploy-access-gate` 的配置），`server.js` 仅本地开发用。生产如需缓存策略，在 nginx 层配。
+- 未加 `ETag` / `Last-Modified`：有 `no-store` 后条件请求无意义。
+- `HEAD` 请求正常带 `no-store`（未单独处理，由同一 `writeHead` 分支覆盖）。
