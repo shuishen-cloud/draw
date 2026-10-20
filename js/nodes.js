@@ -1,5 +1,6 @@
 import { DBG, escapeHtml, seq, state, view } from './state.js';
 import { bindLinkHandle, layoutEdgeLabel, redrawEdges } from './edges.js';
+import { renderMarkdown } from './md.js';
 import { readAsDataURL } from './io1.js';
 import { applyFilter, refreshOutline } from './outline.js';
 import { runExecNode } from './run.js';
@@ -67,10 +68,12 @@ export function renderNode(node) {
     <div class="bar">
       <span class="dot"></span>
       <span class="title"></span>
+      <button class="md-toggle" type="button" title="切换 编辑 / 预览">预览</button>
       <select class="zone-pick" title="归属区域（大纲章节）"></select>
       <span class="close" title="删除节点">×</span>
     </div>
     <div class="body"></div>
+    <div class="md-view" hidden></div>
     <div class="port in"  title="输入（可视提示）"></div>
     <div class="port out" title="拖出连线（整个节点都可拖）"></div>
     <div class="edge-hot" data-side="left"></div>
@@ -211,6 +214,28 @@ export function renderNode(node) {
   });
   node.zonePickEl = pick;
 
+  // ---- Markdown 预览切换 ----
+  const mdToggle = el.querySelector('.md-toggle');
+  if (node.kind === 'img') {
+    mdToggle.remove();              // 图片节点无文本，不需要预览
+  } else {
+    mdToggle.addEventListener('pointerdown', (e) => e.stopPropagation());
+    mdToggle.addEventListener('click', (e) => {
+      e.stopPropagation();
+      setNodeMode(node, node.el.dataset.mode === 'preview' ? 'edit' : 'preview');
+    });
+  }
+  el.dataset.mode = 'edit';
+
+  // 预览态下点击内容区 → 切回编辑（“点一下就能改”）
+  el.querySelector('.md-view').addEventListener('click', (e) => {
+    if (el.dataset.mode !== 'preview') return;
+    // 允许点链接不触发（否则无法跳转）
+    if (e.target.closest('a')) return;
+    e.stopPropagation();
+    setNodeMode(node, 'edit');
+  });
+
   worldEl().appendChild(el);   // 节点进入 world 坐标系
   node.el = el;
   refreshZonePicker(node);     // 初始化下拉选项
@@ -246,6 +271,37 @@ export function loadImageFile(node, file) {
     DBG.log('图片载入', node.id, file.name, Math.round(file.size / 1024) + 'KB');
   };
   reader.readAsDataURL(file);
+}
+
+// 切换节点显示模式：'edit'（源码）| 'preview'（Markdown 渲染）
+// 状态仅存 DOM（node.el.dataset.mode），不写入导出 JSON。
+export function setNodeMode(node, mode) {
+  const el = node.el;
+  if (!el) return;
+  const view = el.querySelector('.md-view');
+  const body = el.querySelector('.body');
+  const toggle = el.querySelector('.md-toggle');
+  if (!view || !body) return;
+
+  el.dataset.mode = mode;
+  const preview = mode === 'preview';
+
+  if (preview) {
+    // 取当前文本：doc/output/exec 的正文与提示词都算内容
+    const src = [node.text || '', node.prompt || ''].filter(Boolean).join('\n\n');
+    const html = renderMarkdown(src);
+    view.innerHTML = html || '<p class="md-empty">（无内容）</p>';
+    view.hidden = false;
+    body.hidden = true;
+    DBG.log('切换预览', node.id, '原文', src.length, '字 -> HTML', html.length);
+  } else {
+    view.hidden = true;
+    view.innerHTML = '';
+    body.hidden = false;
+    DBG.log('切回编辑', node.id);
+  }
+  if (toggle) toggle.textContent = preview ? '编辑' : '预览';
+  el.classList.toggle('previewing', preview);
 }
 
 export function layoutNode(node) {

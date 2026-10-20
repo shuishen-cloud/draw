@@ -298,6 +298,8 @@
     flex: 1 1 auto; display: flex; align-items: stretch; min-height: 0;
     min-width: 0; overflow: hidden;
   }
+  /* [hidden] 的 display:none 会被上面的 display:flex 覆盖，必须显式声明 */
+  .node .body[hidden] { display: none; }
   /* 单子项（textarea / .out）需要撑满 body 的交叉轴高度 */
   .node .body > * { align-self: stretch; }
   .node textarea, .node .out {
@@ -316,6 +318,83 @@
     overflow-wrap: anywhere; word-break: break-word;
   }
   .node .out.empty::before { content: "（执行结果会出现在这里）"; color: #b3b6bb; }
+
+  /* ---------- Markdown 预览 ---------- */
+  .node .md-view {
+    flex: 1 1 0; min-height: 0; min-width: 0;
+    padding: 9px 11px; font-size: 13.5px; line-height: 1.65;
+    color: #222; overflow-y: auto; overscroll-behavior: contain;
+    scrollbar-width: thin; cursor: text;
+    overflow-wrap: anywhere; word-break: break-word;
+  }
+  .node .md-view[hidden] { display: none; }
+  .md-view > :first-child { margin-top: 0; }
+  .md-view > :last-child { margin-bottom: 0; }
+  .md-view h1, .md-view h2, .md-view h3,
+  .md-view h4, .md-view h5, .md-view h6 {
+    margin: 12px 0 6px; line-height: 1.3; font-weight: 700; color: #111;
+  }
+  .md-view h1 { font-size: 19px; }
+  .md-view h2 { font-size: 17px; }
+  .md-view h3 { font-size: 15px; }
+  .md-view h4, .md-view h5, .md-view h6 { font-size: 13.5px; color: #333; }
+  .md-view p { margin: 6px 0; }
+  .md-view ul, .md-view ol { margin: 6px 0; padding-left: 1.5em; }
+  .md-view li { margin: 2px 0; }
+  .md-view li > ul, .md-view li > ol { margin: 2px 0; }
+  .md-view code {
+    font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 12.5px;
+    background: #f1f2f5; border-radius: 4px; padding: 1px 4px;
+  }
+  .md-view pre {
+    margin: 8px 0; padding: 8px 10px; background: #f6f7f9;
+    border: 1px solid #e6e8ec; border-radius: 8px;
+    overflow-x: auto; overscroll-behavior-x: contain;
+  }
+  .md-view pre code {
+    background: none; padding: 0; font-size: 12.5px; line-height: 1.55;
+    white-space: pre;
+  }
+  .md-view blockquote {
+    margin: 8px 0; padding: 2px 0 2px 10px;
+    border-left: 3px solid #d5d7db; color: #666;
+  }
+  .md-view hr { border: 0; border-top: 1px solid #e6e8ec; margin: 12px 0; }
+  .md-view a { color: var(--accent); text-decoration: underline; }
+  .md-view a:hover { color: #3730a3; }
+  .md-view .md-empty { color: #b3b6bb; }
+
+  /* 预览切换按钮（节点标题栏） */
+  .node .md-toggle {
+    flex: none; border: 1px solid var(--border); background: #fff;
+    color: #555; font-size: 10.5px; line-height: 1; border-radius: 5px;
+    padding: 3px 6px; cursor: pointer; font-family: inherit;
+  }
+  .node .md-toggle:hover { border-color: var(--accent); color: var(--accent); }
+  .node.previewing .md-toggle { background: rgba(79,70,229,.12); border-color: var(--accent); color: var(--accent); }
+
+  /* 对话气泡里的 Markdown */
+  .msg .msg-md > :first-child { margin-top: 0; }
+  .msg .msg-md > :last-child { margin-bottom: 0; }
+  .msg .msg-md h1, .msg .msg-md h2, .msg .msg-md h3 {
+    margin: 10px 0 5px; font-size: 14.5px; font-weight: 700;
+  }
+  .msg .msg-md p { margin: 5px 0; }
+  .msg .msg-md ul, .msg .msg-md ol { margin: 5px 0; padding-left: 1.4em; }
+  .msg .msg-md code {
+    font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 12px;
+    background: rgba(0,0,0,.06); border-radius: 4px; padding: 1px 4px;
+  }
+  .msg .msg-md pre {
+    margin: 6px 0; padding: 7px 9px; background: rgba(0,0,0,.05);
+    border-radius: 7px; overflow-x: auto; overflow-wrap: normal;
+  }
+  .msg .msg-md pre code { background: none; padding: 0; white-space: pre; }
+  .msg .msg-md blockquote {
+    margin: 6px 0; padding-left: 9px; border-left: 3px solid rgba(0,0,0,.15);
+    color: #555;
+  }
+  .msg .msg-md a { color: var(--accent); text-decoration: underline; }
 
   /* 图片节点 */
   .node[data-kind="img"] .body { overflow: hidden; background:

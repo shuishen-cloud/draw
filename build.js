@@ -18,6 +18,7 @@ const ROOT = __dirname;
 // 依赖顺序：被依赖的在前。循环依赖间顺序不敏感（函数声明提升）。
 const ORDER = [
   'state.js',
+  'md.js',
   'geom.js',
   'viewport.js',
   'minimap.js',
