@@ -112,4 +112,61 @@ autoAssignZone(node):
 
 ## 6. 实现与校验结果
 
-（close 阶段回填）
+### 6.1 改动
+
+| 文件 | 关键改动 |
+|---|---|
+| `js/geom.js` | 新增 `zoneAtPointIn(wx, wy, zones)` —— 纯几何判定，返回面积最小的命中区域 |
+| `js/zones.js` | `zoneAtPoint(wx, wy)` 适配 `state.zones`；`autoAssignZone(node)` 落实归属并同步下拉/大纲/快照 |
+| `js/nodes.js` | `startDrag` 的 `onMove` 实时高亮 `drop-target`，`onUp` 调 `autoAssignZone`；`bar` 的 `pointerdown` 用 `closest('.close,.zone-pick,.md-toggle')` 统一排除控件 |
+| `styles.css` | `.zone.drop-target` 高亮样式；`.node .bar > * { flex: none }` + `.title` 弹性 + `cursor: grab` |
+| `tests/test_zone.mjs` 🆕 | 12 个几何判定单测 |
+| `tests/e2e_zone_auto.cjs` 🆕 | 32 项端到端断言（含真实鼠标拖动） |
+
+### 6.2 校验结果（实测）
+
+```
+$ node --test tests/test_zone.mjs        → pass 12, fail 0
+$ node tests/e2e_zone_auto.cjs
+[1] 页面加载            ✔ 无 JS 异常
+[2] 纯几何判定          ✔ 区域内命中  ✔ 区域外 null  ✔ 边界命中
+[3] 拖入区域            ✔ zoneId 变更  ✔ autoAssignZone 返回值  ✔ 下拉同步
+[4] 拖出区域            ✔ 清空  ✔ 返回 null  ✔ 下拉回「未分类」
+[5] 重叠区域            ✔ 归小区域  ✔ 仅大区域处归大区域
+[6] 无变化              ✔ 归属保持  ✔ 不重复打日志
+[7] 手动下拉            ✔ 仍可覆盖
+[8] 区域拖动            ✔ 归属不变  ✔ 不触发自动归属
+[9] 大纲                ✔ 出现区域标题
+[10] 导出               ✔ 含 zoneId、version=1
+[11] 真实鼠标拖动       ✔ 节点移动  ✔ 中心入区  ✔ 自动归属  ✔ 抓手存在  ✔ 中心不落在控件上
+[11b] 拖动高亮          ✔ 进入高亮  ✔ 拖出取消
+[12] 点控件不误拖       ✔ 下拉/关闭  ✔ 预览按钮
+[13] 无异常             ✔ 全程无 JS 异常
+结果：32 通过，0 失败
+```
+
+全量回归（197 项）：
+
+```
+tests/test_geom.mjs         → 12 passed
+tests/test_zone.mjs         → 12 passed
+tests/test_md.mjs           → 21 passed
+tests/e2e_node_scroll.cjs   → 21 通过
+tests/e2e_md_render.cjs     → 45 通过
+tests/e2e_touch_link.cjs    → 17 通过
+tests/e2e_port_clash.cjs    → 16 通过
+tests/e2e_ux_fixes.cjs      → 21 通过
+tests/e2e_zone_auto.cjs     → 32 通过
+```
+
+### 6.3 过程中的坑
+
+1. **标题栏控件吃掉拖动起手点**：`bar` 的 `pointerdown` 只排除了 `.close` 与 `.zone-pick`，漏了 `.md-toggle`；且 `.zone-pick` 没有 `flex: none`，会抢 `.title` 的弹性空间。窄节点（180px）下标题栏中心正好落在下拉上，**点中心根本不触发拖动**——这是「模拟坐标能过、真实拖拽失败」的根因。
+2. **纯几何判定必须放在无 DOM 依赖的模块**：`zoneAtPointIn` 一开始写在 `zones.js`，但 `zones.js` 顶层 `import ./edges.js`（依赖 `document`），`node --test` 直接报 `document is not defined`。改放 `geom.js`。
+3. **`pointermove` 不能做重活**：每帧写 `zoneId`、刷新大纲、触发 autosave 会卡顿。拆成「移动时只切 class，松手时落实归属」。
+
+### 6.4 遗留与注意
+
+- **手动下拉会被下一次拖动覆盖**——这是刻意的（位置是更直观的意图表达）。若将来需要「锁定归属」，应给 `node` 加 `zoneLocked` 字段。
+- 判定用**节点中心点**：卡片比区域大时仍能归属（合理）；但只有一角伸进区域时不归属。
+- 导入画布时 `importCanvasData` 直接写入 `zoneId`，**不走**自动判定，保持原样。
