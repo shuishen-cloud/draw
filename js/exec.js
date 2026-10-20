@@ -41,6 +41,7 @@ export async function runEdge(edgeId) {
   setOutput(dst, '');
   dst.textEl.classList.remove('empty');
   edge.running = true;
+  dst.el?.classList.add('running');     // 目标节点脉冲，让用户看到在跑哪个
   redrawEdges();
   // 流式输出期间节流重绘：目标节点内容增长会改变尺寸，线要及时跟上，
   // 但不要每帧重绘（会拖慢渲染）。running 动画靠 class 维持，不受重绘影响。
@@ -55,6 +56,7 @@ export async function runEdge(edgeId) {
     onDelta: (t) => { setOutput(dst, t); scheduleRedraw(); },
   });
   edge.running = false;
+  dst.el?.classList.remove('running');
   redrawEdges();
   DBG.log('========== runEdge', edgeId, '结束，输出', outText.length, '字符 ==========');
 }

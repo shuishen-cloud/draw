@@ -180,19 +180,23 @@ const SPY = `
   const toolbarHit = await page.evaluate(() => {
     const ids = ['reset1', 'fit', 'zoomIn', 'zoomOut', 'saveCanvas'];
     const blocked = [];
+    const vw = window.innerWidth, vh = window.innerHeight;
     for (const id of ids) {
       const btn = document.getElementById(id);
       if (!btn) continue;
       const r = btn.getBoundingClientRect();
       if (r.width === 0) continue;
-      const top = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+      const cx = r.left + r.width / 2, cy = r.top + r.height / 2;
+      // 被横向滚动挤出可视区的按钮不计：工具栏在窄屏是可横滑的
+      if (cx < 0 || cx > vw || cy < 0 || cy > vh) continue;
+      const top = document.elementFromPoint(cx, cy);
       if (!(top === btn || btn.contains(top))) {
         blocked.push(id + ' -> ' + (top?.id || top?.className || top?.tagName));
       }
     }
     return blocked;
   });
-  check('工具栏按钮未被遮挡', toolbarHit.length === 0, toolbarHit.join(' | '));
+  check('可视区内的工具栏按钮未被遮挡', toolbarHit.length === 0, toolbarHit.join(' | '));
 
   console.log('\n[8] 点 1:1 后节点仍在可见区域');
   const zoom = await page.evaluate(() => {

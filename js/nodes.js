@@ -70,7 +70,8 @@ export function renderNode(node) {
   el.innerHTML = `
     <div class="bar">
       <span class="dot"></span>
-      <span class="title"></span>
+      <span class="title" title="双击可重命名"></span>
+      <button class="run-node" type="button" title="运行此节点">▶</button>
       <button class="md-toggle" type="button" title="切换 编辑 / 预览">预览</button>
       <select class="zone-pick" title="归属区域（大纲章节）"></select>
       <span class="close" title="删除节点">×</span>
@@ -86,6 +87,9 @@ export function renderNode(node) {
     <div class="resize-handle" title="拖拽调整大小"></div>
   `;
   el.querySelector('.title').textContent = node.title;
+
+  // ---- 标题就地重命名（双击进入）----
+  bindTitleEdit(node, el.querySelector('.title'));
 
   const body = el.querySelector('.body');
   if (node.kind === 'img') {
@@ -158,10 +162,6 @@ export function renderNode(node) {
     body.style.flexDirection = 'column';
     // 把标签放到最前（在 body 之前展示）
     body.parentNode.insertBefore(inlabel, body);
-    // 执行节点可点击自身运行
-    el.querySelector('.title').addEventListener('dblclick', (e) => {
-      e.stopPropagation(); runExecNode(node.id);
-    });
   } else {
     const ta = document.createElement('textarea');
     ta.placeholder = '在这里输入文档内容…';
@@ -180,7 +180,7 @@ export function renderNode(node) {
   bar.addEventListener('pointerdown', (e) => {
     // 标题栏里的控件各自处理交互，不能连带拖动节点。
     // 用 closest 而不是 classList，确保点到控件内部子元素也不误触。
-    if (e.target.closest('.close, .zone-pick, .md-toggle')) return;
+    if (e.target.closest('.close, .zone-pick, .md-toggle, .run-node')) return;
     selectNode(node.id);
     startDrag(e, node);
   });
@@ -231,6 +231,20 @@ export function renderNode(node) {
     mdToggle.addEventListener('click', (e) => {
       e.stopPropagation();
       setNodeMode(node, node.el.dataset.mode === 'preview' ? 'edit' : 'preview');
+    });
+  }
+
+  // ---- 运行按钮（触摸设备的主要入口，不依赖键盘/double-click）----
+  // 只给执行节点显示：其它节点的运行入口是「选中连线 → 运行选中」，
+  // 无差别给每个节点加按钮会把标题栏挤满（手机上尤其严重）。
+  const runBtn = el.querySelector('.run-node');
+  if (node.kind !== 'exec') {
+    runBtn.remove();
+  } else {
+    runBtn.addEventListener('pointerdown', (e) => e.stopPropagation());
+    runBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      runNodeById(node.id);
     });
   }
   el.dataset.mode = 'edit';
@@ -322,6 +336,63 @@ export function setNodeMode(node, mode) {
   }
   if (toggle) toggle.textContent = preview ? '编辑' : '预览';
   el.classList.toggle('previewing', preview);
+}
+
+// =========================================================================
+// 节点重命名：双击标题就地编辑（平板无键盘也能用）
+// =========================================================================
+export function renameNode(node, title) {
+  const titles = { output: '输出', img: '图片', doc: '文档', exec: '执行' };
+  const clean = String(title ?? '').replace(/\s+/g, ' ').trim();
+  const next = clean || titles[node.kind] || '节点';
+  if (next === node.title) return node.title;
+  const prev = node.title;
+  node.title = next;
+  if (node.el) {
+    const t = node.el.querySelector('.title');
+    if (t) t.textContent = next;
+  }
+  DBG.log('重命名', node.id, JSON.stringify(prev), '->', JSON.stringify(next));
+  refreshOutline();
+  window.scheduleSnapshot?.();
+  return next;
+}
+
+// 把标题变成可就地编辑的 contenteditable
+function bindTitleEdit(node, titleEl) {
+  if (!titleEl) return;
+  const start = () => {
+    if (titleEl.isContentEditable) return;
+    titleEl.contentEditable = 'true';
+    titleEl.classList.add('editing');
+    titleEl.focus();
+    // 全选，方便直接输入新名字
+    const r = document.createRange();
+    r.selectNodeContents(titleEl);
+    const sel = window.getSelection();
+    sel.removeAllRanges();
+    sel.addRange(r);
+  };
+  const finish = (save) => {
+    if (!titleEl.isContentEditable) return;
+    const raw = titleEl.textContent;
+    titleEl.contentEditable = 'false';
+    titleEl.classList.remove('editing');
+    if (save) renameNode(node, raw);
+    else titleEl.textContent = node.title;   // 取消：回滚显示
+  };
+
+  titleEl.addEventListener('dblclick', (e) => { e.stopPropagation(); start(); });
+  // 编辑中不触发节点拖动（bar 的 pointerdown 已用 closest 排除，这里双保险）
+  titleEl.addEventListener('pointerdown', (e) => {
+    if (titleEl.isContentEditable) e.stopPropagation();
+  });
+  titleEl.addEventListener('keydown', (e) => {
+    if (!titleEl.isContentEditable) return;
+    if (e.key === 'Enter') { e.preventDefault(); finish(true); titleEl.blur(); }
+    else if (e.key === 'Escape') { e.preventDefault(); finish(false); titleEl.blur(); }
+  });
+  titleEl.addEventListener('blur', () => finish(true));
 }
 
 export function layoutNode(node) {

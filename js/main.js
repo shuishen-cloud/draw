@@ -9,7 +9,7 @@ import { autosaveCanvas, exportCanvasData, exportToFile, importFromFile, restore
 import { bindMiniMapClick, drawMiniMap } from './minimap.js';
 import { createNode } from './nodes.js';
 import { refreshLevelFilter, refreshOutline } from './outline.js';
-import { runAll } from './run.js';
+import { runAll, runSelection } from './run.js';
 import { createTask, loadTasks, refreshTasks, switchOlTab } from './tasks.js';
 import { applyView, canvasEl, centerContent, fitToContent, zoomAt } from './viewport.js';
 import { createZone } from './zones.js';
@@ -74,7 +74,28 @@ function init() {
   });
   document.getElementById('addZone').addEventListener('click', () =>
     createZone({}));
-  document.getElementById('runAll').addEventListener('click', runAll);
+  // 全部运行：运行中再次点击 = 取消（平板上没有 Esc 键）
+  let runSignal = null;
+  document.getElementById('runAll').addEventListener('click', () => {
+    if (runSignal) {
+      runSignal.aborted = true;
+      DBG.log('请求取消运行');
+      flashToast('正在取消…');
+      return;
+    }
+    runSignal = { aborted: false };
+    const s = runSignal;
+    runAll({
+      signal: s,
+      onProgress: ({ done, total }) => {
+        DBG.log('运行进度', done, '/', total);
+      },
+    }).finally(() => {
+      if (runSignal === s) runSignal = null;
+    });
+  });
+  // 触摸设备主入口：运行当前选中的连线 / 节点
+  document.getElementById('runSel').addEventListener('click', () => runSelection());
   document.getElementById('toggleOutline').addEventListener('click', () => {
     document.getElementById('outline').classList.toggle('collapsed');
     requestAnimationFrame(() => { redrawEdges(); drawMiniMap(); });
@@ -228,7 +249,7 @@ function init() {
   window.addEventListener('resize', () => { redrawEdges(); drawMiniMap(); });
 
   // ---- 移动端/窄屏：默认折叠两侧栏，画布占满屏幕 ----
-  if (window.matchMedia('(max-width: 768px)').matches) {
+  if (window.matchMedia('(max-width: 1024px)').matches) {
     document.getElementById('outline').classList.add('collapsed');
     document.getElementById('sidebar').classList.add('collapsed');
     requestAnimationFrame(() => { redrawEdges(); drawMiniMap(); });
