@@ -107,6 +107,8 @@ export function clearCanvas() {
   Object.values(state.edges).forEach(e => e.labelEl?.remove());
   Object.values(state.nodes).forEach(n => n.el?.remove());
   Object.values(state.zones).forEach(z => z.el?.remove());
+  // 增量渲染不再整层清空 SVG，这里必须显式移除残留的线，否则导入后旧线还在
+  document.querySelectorAll('#edges path.wire, #edges path.ghost').forEach(p => p.remove());
   state.nodes = {}; state.edges = {}; state.zones = {};
   state.tasks = {}; state.selectedEdgeId = null; state.activeTaskId = null;
   state.filterZoneId = 'all';

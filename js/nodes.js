@@ -1,9 +1,13 @@
 import { DBG, escapeHtml, seq, state, view } from './state.js';
-import { finishLinkTo, layoutEdgeLabel, redrawEdges, startLinkFrom } from './edges.js';
+import { bindLinkHandle, layoutEdgeLabel, redrawEdges } from './edges.js';
+import { renderMarkdown } from './md.js';
 import { readAsDataURL } from './io1.js';
 import { applyFilter, refreshOutline } from './outline.js';
 import { runExecNode } from './run.js';
 import { worldEl } from './viewport.js';
+// 循环依赖：zones.js 也 import 本文件的 layoutNode/refreshAllZonePickers。
+// 两侧都只导出函数声明（无顶层副作用），ESM 提升后可安全互相调用。
+import { autoAssignZone, zoneAtPoint } from './zones.js';
 // 2. 节点增删
 // =========================================================================
 export function createNode(kind, opts = {}) {
@@ -66,16 +70,26 @@ export function renderNode(node) {
   el.innerHTML = `
     <div class="bar">
       <span class="dot"></span>
-      <span class="title"></span>
+      <span class="title" title="双击可重命名"></span>
+      <button class="run-node" type="button" title="运行此节点">▶</button>
+      <button class="md-toggle" type="button" title="切换 编辑 / 预览">预览</button>
       <select class="zone-pick" title="归属区域（大纲章节）"></select>
       <span class="close" title="删除节点">×</span>
     </div>
     <div class="body"></div>
-    <div class="port in"  title="输入"></div>
-    <div class="port out" title="拖我连线"></div>
+    <div class="md-view" hidden></div>
+    <div class="port port-in"  title="输入（可视提示）"></div>
+    <div class="port port-out" title="拖出连线（整个节点都可拖）"></div>
+    <div class="edge-hot" data-side="left"></div>
+    <div class="edge-hot" data-side="right"></div>
+    <div class="edge-hot" data-side="top"></div>
+    <div class="edge-hot" data-side="bottom"></div>
     <div class="resize-handle" title="拖拽调整大小"></div>
   `;
   el.querySelector('.title').textContent = node.title;
+
+  // ---- 标题就地重命名（双击进入）----
+  bindTitleEdit(node, el.querySelector('.title'));
 
   const body = el.querySelector('.body');
   if (node.kind === 'img') {
@@ -90,7 +104,9 @@ export function renderNode(node) {
     body.appendChild(img);
     body.appendChild(drop);
     node.imgEl = img;
-    el.addEventListener('click', () => {
+    // 选图只绑在图片内容区：绑到整个节点时，点标题栏的分类下拉/删除
+    // 也会冒泡到这里，误弹出文件选择器。
+    body.addEventListener('click', () => {
       const inp = document.createElement('input');
       inp.type = 'file'; inp.accept = 'image/*';
       inp.onchange = () => inp.files[0] && loadImageFile(node, inp.files[0]);
@@ -146,10 +162,6 @@ export function renderNode(node) {
     body.style.flexDirection = 'column';
     // 把标签放到最前（在 body 之前展示）
     body.parentNode.insertBefore(inlabel, body);
-    // 执行节点可点击自身运行
-    el.querySelector('.title').addEventListener('dblclick', (e) => {
-      e.stopPropagation(); runExecNode(node.id);
-    });
   } else {
     const ta = document.createElement('textarea');
     ta.placeholder = '在这里输入文档内容…';
@@ -166,7 +178,9 @@ export function renderNode(node) {
   // 移动 + 选中
   const bar = el.querySelector('.bar');
   bar.addEventListener('pointerdown', (e) => {
-    if (e.target.classList.contains('close')) return;
+    // 标题栏里的控件各自处理交互，不能连带拖动节点。
+    // 用 closest 而不是 classList，确保点到控件内部子元素也不误触。
+    if (e.target.closest('.close, .zone-pick, .md-toggle, .run-node')) return;
     selectNode(node.id);
     startDrag(e, node);
   });
@@ -180,17 +194,13 @@ export function renderNode(node) {
     window.scheduleSnapshot?.();
   });
 
-  // 尾部端口：从这里拖出连线
-  el.querySelector('.port.out').addEventListener('pointerdown', (e) => {
-    e.stopPropagation(); e.preventDefault();
-    startLinkFrom(node, e);
+  // 连线：两个端口都是「拖出」热区（视觉上区分左右，语义上不限制方向）
+  bindLinkHandle(node, el.querySelector('.port-out'));
+  bindLinkHandle(node, el.querySelector('.port-in'));
+  // 边框热区：节点四周 8px 的不可见条带，手指粗也能拖出连线
+  el.querySelectorAll('.edge-hot').forEach(hot => {
+    bindLinkHandle(node, hot);
   });
-  // 头部端口：可在此结束连线（也支持直接落在节点上）
-  el.querySelector('.port.in').addEventListener('pointerup', (e) => {
-    e.stopPropagation();
-    finishLinkTo(node);
-  });
-  el.addEventListener('pointerup', () => finishLinkTo(node));
 
   // 缩放手柄
   el.querySelector('.resize-handle').addEventListener('pointerdown', (e) => {
@@ -201,6 +211,8 @@ export function renderNode(node) {
   // 区域选择器：手动指定节点归属哪个区域（大纲章节）
   const pick = el.querySelector('.zone-pick');
   pick.addEventListener('pointerdown', (e) => e.stopPropagation());
+  // 阻止冒泡到节点/内容区，否则图片节点会误触发选图
+  pick.addEventListener('click', (e) => e.stopPropagation());
   pick.addEventListener('change', () => {
     node.zoneId = pick.value || null;
     DBG.log('节点', node.id, '归属区域 ->', node.zoneId);
@@ -210,9 +222,52 @@ export function renderNode(node) {
   });
   node.zonePickEl = pick;
 
+  // ---- Markdown 预览切换 ----
+  const mdToggle = el.querySelector('.md-toggle');
+  if (node.kind === 'img') {
+    mdToggle.remove();              // 图片节点无文本，不需要预览
+  } else {
+    mdToggle.addEventListener('pointerdown', (e) => e.stopPropagation());
+    mdToggle.addEventListener('click', (e) => {
+      e.stopPropagation();
+      setNodeMode(node, node.el.dataset.mode === 'preview' ? 'edit' : 'preview');
+    });
+  }
+
+  // ---- 运行按钮（触摸设备的主要入口，不依赖键盘/double-click）----
+  // 只给执行节点显示：其它节点的运行入口是「选中连线 → 运行选中」，
+  // 无差别给每个节点加按钮会把标题栏挤满（手机上尤其严重）。
+  const runBtn = el.querySelector('.run-node');
+  if (node.kind !== 'exec') {
+    runBtn.remove();
+  } else {
+    runBtn.addEventListener('pointerdown', (e) => e.stopPropagation());
+    runBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      runNodeById(node.id);
+    });
+  }
+  el.dataset.mode = 'edit';
+
+  // 预览态下点击内容区 → 切回编辑（“点一下就能改”）
+  el.querySelector('.md-view').addEventListener('click', (e) => {
+    if (el.dataset.mode !== 'preview') return;
+    // 允许点链接不触发（否则无法跳转）
+    if (e.target.closest('a')) return;
+    e.stopPropagation();
+    setNodeMode(node, 'edit');
+  });
+
   worldEl().appendChild(el);   // 节点进入 world 坐标系
   node.el = el;
   refreshZonePicker(node);     // 初始化下拉选项
+
+  // 文本类节点默认进入预览（打开即看到渲染效果）；图片节点无文本，保持编辑。
+  // 注意：必须在 node.el 赋值之后调用，setNodeMode 依赖 node.el。
+  if (node.kind !== 'img') {
+    setNodeMode(node, 'preview');
+    DBG.log('默认预览', node.id);
+  }
 }
 
 // 刷新单个节点的区域下拉选项（区域增删后调用）
@@ -247,6 +302,99 @@ export function loadImageFile(node, file) {
   reader.readAsDataURL(file);
 }
 
+// 切换节点显示模式：'edit'（源码）| 'preview'（Markdown 渲染）
+// 状态仅存 DOM（node.el.dataset.mode），不写入导出 JSON。
+export function setNodeMode(node, mode) {
+  const el = node.el;
+  if (!el) {
+    // 常见误用：在 renderNode 里、node.el = el 之前调用。
+    // 以前这里静默 return，导致「默认预览」看着设了却不生效。
+    DBG.warn('setNodeMode: 节点 DOM 尚未就绪', node.id, mode);
+    return;
+  }
+  const view = el.querySelector('.md-view');
+  const body = el.querySelector('.body');
+  const toggle = el.querySelector('.md-toggle');
+  if (!view || !body) return;
+
+  el.dataset.mode = mode;
+  const preview = mode === 'preview';
+
+  if (preview) {
+    // 取当前文本：doc/output/exec 的正文与提示词都算内容
+    const src = [node.text || '', node.prompt || ''].filter(Boolean).join('\n\n');
+    const html = renderMarkdown(src);
+    view.innerHTML = html || '<p class="md-empty">（无内容）</p>';
+    view.hidden = false;
+    body.hidden = true;
+    DBG.log('切换预览', node.id, '原文', src.length, '字 -> HTML', html.length);
+  } else {
+    view.hidden = true;
+    view.innerHTML = '';
+    body.hidden = false;
+    DBG.log('切回编辑', node.id);
+  }
+  if (toggle) toggle.textContent = preview ? '编辑' : '预览';
+  el.classList.toggle('previewing', preview);
+}
+
+// =========================================================================
+// 节点重命名：双击标题就地编辑（平板无键盘也能用）
+// =========================================================================
+export function renameNode(node, title) {
+  const titles = { output: '输出', img: '图片', doc: '文档', exec: '执行' };
+  const clean = String(title ?? '').replace(/\s+/g, ' ').trim();
+  const next = clean || titles[node.kind] || '节点';
+  if (next === node.title) return node.title;
+  const prev = node.title;
+  node.title = next;
+  if (node.el) {
+    const t = node.el.querySelector('.title');
+    if (t) t.textContent = next;
+  }
+  DBG.log('重命名', node.id, JSON.stringify(prev), '->', JSON.stringify(next));
+  refreshOutline();
+  window.scheduleSnapshot?.();
+  return next;
+}
+
+// 把标题变成可就地编辑的 contenteditable
+function bindTitleEdit(node, titleEl) {
+  if (!titleEl) return;
+  const start = () => {
+    if (titleEl.isContentEditable) return;
+    titleEl.contentEditable = 'true';
+    titleEl.classList.add('editing');
+    titleEl.focus();
+    // 全选，方便直接输入新名字
+    const r = document.createRange();
+    r.selectNodeContents(titleEl);
+    const sel = window.getSelection();
+    sel.removeAllRanges();
+    sel.addRange(r);
+  };
+  const finish = (save) => {
+    if (!titleEl.isContentEditable) return;
+    const raw = titleEl.textContent;
+    titleEl.contentEditable = 'false';
+    titleEl.classList.remove('editing');
+    if (save) renameNode(node, raw);
+    else titleEl.textContent = node.title;   // 取消：回滚显示
+  };
+
+  titleEl.addEventListener('dblclick', (e) => { e.stopPropagation(); start(); });
+  // 编辑中不触发节点拖动（bar 的 pointerdown 已用 closest 排除，这里双保险）
+  titleEl.addEventListener('pointerdown', (e) => {
+    if (titleEl.isContentEditable) e.stopPropagation();
+  });
+  titleEl.addEventListener('keydown', (e) => {
+    if (!titleEl.isContentEditable) return;
+    if (e.key === 'Enter') { e.preventDefault(); finish(true); titleEl.blur(); }
+    else if (e.key === 'Escape') { e.preventDefault(); finish(false); titleEl.blur(); }
+  });
+  titleEl.addEventListener('blur', () => finish(true));
+}
+
 export function layoutNode(node) {
   const el = node.el;
   if (!el) return;
@@ -266,16 +414,33 @@ export function selectNode(id) {
 export function startDrag(e, node) {
   const startX = e.clientX, startY = e.clientY;
   const origX = node.x, origY = node.y;
+  let highlighted = null;          // 当前高亮的区域 id
+
+  // 高亮即将归属的区域（松手才会真正写入）
+  const highlight = (zone) => {
+    const next = zone ? zone.id : null;
+    if (next === highlighted) return;
+    if (highlighted) {
+      state.zones[highlighted]?.el?.classList.remove('drop-target');
+    }
+    if (next) state.zones[next]?.el?.classList.add('drop-target');
+    highlighted = next;
+  };
+
   function onMove(ev) {
     // 除以 scale：鼠标在屏幕上动 1px，节点在 world 中只应动 1/scale
     node.x = origX + (ev.clientX - startX) / view.scale;
     node.y = origY + (ev.clientY - startY) / view.scale;
     layoutNode(node);
     redrawEdges();
+    highlight(zoneAtPoint(node.x + node.w / 2, node.y + node.h / 2));
   }
   function onUp() {
     window.removeEventListener('pointermove', onMove);
     window.removeEventListener('pointerup', onUp);
+    highlight(null);
+    // 拖动结束按位置自动判定区域归属（拖出则清空）
+    autoAssignZone(node);
     window.scheduleSnapshot?.();   // 拖动结束保存位置
   }
   window.addEventListener('pointermove', onMove);

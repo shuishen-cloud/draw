@@ -14,7 +14,9 @@
   #canvas.panning { cursor: grabbing; }
 
   /* 布局：画布区 + 右侧侧边栏（flex） */
-  #stage { position: absolute; inset: 0; display: flex; }
+  /* overflow: hidden —— 折叠的侧栏用 transform 移出屏幕但仍占布局宽度，
+     不在 stage 裁剪的话溢出会传到 html，整页出现水平滚动条。 */
+  #stage { position: absolute; inset: 0; display: flex; overflow: hidden; }
   #canvasWrap { position: relative; flex: 1 1 auto; min-width: 0; overflow: hidden; }
   #canvasWrap.dropping::after {
     content: '松开以导入文件'; position: absolute; inset: 12px; z-index: 40;
@@ -131,6 +133,12 @@
     position: absolute; z-index: 0;
     border-radius: 14px; border: 2px dashed;
     pointer-events: none;
+    transition: box-shadow .12s, background-color .12s;
+  }
+  /* 拖动节点时的候选归属区域：描边加亮，松手就会归到这里 */
+  .zone.drop-target {
+    box-shadow: 0 0 0 3px rgba(79,70,229,.35) inset, 0 0 18px rgba(79,70,229,.25);
+    border-style: solid;
   }
   .zone .zone-bar {
     position: absolute; left: 0; top: 0; right: 0;
@@ -162,22 +170,32 @@
   .node[data-kind="exec"] .bar { background: #ede9fe; color: #5b21b6; }
   .node[data-kind="exec"] .dot { background: #7c3aed; }
   .node .exec-prompt {
+    /* 提示词区固定高度、不参与伸缩：结果区再长也不挤它 */
+    flex: 0 0 auto; height: 64px; min-height: 64px;
     width: 100%; border: 0; outline: none; resize: none;
     padding: 8px 9px; font-size: 13px; line-height: 1.5;
     font-family: inherit; background: transparent; color: #222;
     border-bottom: 1px dashed #ddd;
+    overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin;
   }
   .node .exec-prompt::placeholder { color: #b3b6bb; }
   .node .exec-out {
-    flex: 1; min-height: 30px; padding: 8px 9px; font-size: 13px; line-height: 1.5;
-    white-space: pre-wrap; overflow-y: auto; color: #333; background: #faf9ff;
+    flex: 1 1 0; min-height: 0; min-width: 0;
+    padding: 8px 9px; font-size: 13px; line-height: 1.5;
+    white-space: pre-wrap; overflow-wrap: anywhere; word-break: break-word;
+    overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin;
+    color: #333; background: #faf9ff;
   }
   .node .exec-out.empty::before { content: "（执行结果）"; color: #b3b6bb; }
   .node .exec-inlabel {
+    flex: 0 0 auto;
     font-size: 10.5px; color: #8b5cf6; padding: 2px 9px 0; font-weight: 600;
   }
   /* 区域选择器（节点标题栏内）*/
   .node .zone-pick {
+    /* flex: none —— 否则它会抢走 .title 的弹性空间，
+       导致标题栏中央被下拉占据，拖拽起手点不到拖动区 */
+    flex: none;
     font-size: 11px; border: 1px solid #ddd; border-radius: 5px;
     padding: 1px 4px; max-width: 78px; background: #fff; color: #555; cursor: pointer;
   }
@@ -206,11 +224,25 @@
   }
   svg#edges .wire { fill: none; stroke: var(--line); stroke-width: 2.5; pointer-events: stroke; cursor: pointer; }
   svg#edges .wire:hover { stroke: #6b7280; }
+  svg#edges .wire.selected { stroke: #6b7280; stroke-width: 3.5; }
   svg#edges .wire.executable { stroke: var(--accent); stroke-width: 3.5; }
-  svg#edges .wire.running { stroke: #f59e0b; stroke-dasharray: 6 5; animation: dash .6s linear infinite; }
-  @keyframes dash { to { stroke-dashoffset: -11; } }
-  /* 临时拖拽预览线 */
-  svg#edges .ghost { stroke: var(--accent); stroke-width: 2; stroke-dasharray: 5 5; }
+  /* 执行中：虚线沿路径流动。动画只由 class 驱动，元素被复用不会重置。 */
+  svg#edges .wire.running {
+    stroke: #f59e0b; stroke-width: 4; stroke-linecap: round;
+    stroke-dasharray: 8 6;
+    animation: wire-flow .55s linear infinite;
+  }
+  @keyframes wire-flow { from { stroke-dashoffset: 0; } to { stroke-dashoffset: -14; } }
+  /* 闪烁反馈（跳过 / 成功） */
+  svg#edges .wire.flash-skip { stroke: #dc2626; stroke-width: 4; animation: wire-flash .6s ease-out 2; }
+  svg#edges .wire.flash-ok   { stroke: #16a34a; stroke-width: 4; animation: wire-flash .6s ease-out 2; }
+  @keyframes wire-flash { 0%, 100% { opacity: 1; } 50% { opacity: .25; } }
+  /* 临时拖拽预览线：流动虚线，表明「还在拖」 */
+  svg#edges .ghost {
+    stroke: var(--accent); stroke-width: 2.5;
+    stroke-dasharray: 6 5; stroke-linecap: round;
+    animation: wire-flow .55s linear infinite;
+  }
 
   /* 连线上的命令标签 —— 直接就地编辑 */
   .edge-label {
@@ -245,32 +277,172 @@
     overflow: visible;
   }
   .node.selected { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(79,70,229,.15), 0 2px 10px rgba(0,0,0,.06); }
+  /* 拖线时的候选落点：整圈高亮，告诉用户「松手就连到这里」 */
+  .node.link-target {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 4px rgba(79,70,229,.28), 0 2px 10px rgba(0,0,0,.06);
+  }
+  .node.link-target .bar { background: rgba(79,70,229,.12); }
   .node .bar {
     display: flex; align-items: center; gap: 6px;
     padding: 5px 8px; font-size: 12px; font-weight: 600; color: #555;
     background: #f0f1f3; border-radius: 8px 8px 0 0;
     cursor: grab; user-select: none;
   }
+  /* 标题文字是拖动抓手：它总是占满剩余空间，比依赖空白区可靠 */
+  .node .bar > * { flex: none; }
+  .node .bar > .title { flex: 1 1 auto; }
   .node .bar:active { cursor: grabbing; }
   .node .dot { width: 9px; height: 9px; border-radius: 50%; background: #c3c6cb; flex: none; }
   .node[data-kind="doc"]    .dot { background: #16a34a; }
   .node[data-kind="output"] .dot { background: #eab308; }
-  .node .title { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .node .title { flex: 1 1 auto; min-width: 24px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: grab; }
+  .node .title:active { cursor: grabbing; }
+  /* 标题就地编辑态 */
+  .node .title.editing {
+    white-space: normal; overflow: visible; text-overflow: clip;
+    background: #fff; outline: 1.5px solid var(--accent); border-radius: 4px;
+    padding: 0 3px; cursor: text; user-select: text;
+  }
+
+  /* 运行按钮（触摸入口）：小、但热区足够手指点 */
+  .node .run-node {
+    flex: none; border: 1px solid var(--border); background: #fff;
+    color: #16a34a; font-size: 10px; line-height: 1; border-radius: 5px;
+    padding: 3px 6px; cursor: pointer; font-family: inherit; position: relative;
+  }
+  .node .run-node::after { content: ''; position: absolute; inset: -8px; }
+  .node .run-node:hover { background: #ecfdf5; border-color: #16a34a; }
+  .node .run-node:active { transform: scale(.94); }
+  /* 非执行节点：按钮弱化，避免误导 */
+  .node:not([data-kind="exec"]) .run-node { color: #9aa0a6; }
+
+  /* 正在运行的节点：边框脉冲 */
+  .node.running {
+    border-color: #f59e0b;
+    animation: node-pulse 1.1s ease-in-out infinite;
+  }
+  @keyframes node-pulse {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(245,158,11,.0), 0 2px 10px rgba(0,0,0,.06); }
+    50%      { box-shadow: 0 0 0 5px rgba(245,158,11,.28), 0 2px 10px rgba(0,0,0,.06); }
+  }
+  /* 无动画偏好时只保留颜色变化 */
+  @media (prefers-reduced-motion: reduce) {
+    .node.running { animation: none; box-shadow: 0 0 0 3px rgba(245,158,11,.35); }
+    svg#edges .wire.running, svg#edges .ghost { animation: none; }
+  }
   .node .close {
     flex: none; width: 18px; height: 18px; line-height: 16px; text-align: center;
     border-radius: 4px; color: #999; cursor: pointer; font-weight: 700;
   }
   .node .close:hover { background: #e5e7eb; color: #dc2626; }
 
-  .node .body { flex: 1; display: flex; min-height: 0; }
+  /* 滚动容器三层规范：
+     .node        定高、overflow:visible（端口/手柄要伸出边框）
+     .body        约束边界：min-height:0 + overflow:hidden，自己不滚
+     内容区        真正滚动：height:0 + flex:1 + overflow-y:auto
+     缺任一层，flex 会按内容最小高度收缩，内容溢出到节点外。 */
+  .node .body {
+    flex: 1 1 auto; display: flex; align-items: stretch; min-height: 0;
+    min-width: 0; overflow: hidden;
+  }
+  /* [hidden] 的 display:none 会被上面的 display:flex 覆盖，必须显式声明 */
+  .node .body[hidden] { display: none; }
+  /* 单子项（textarea / .out）需要撑满 body 的交叉轴高度 */
+  .node .body > * { align-self: stretch; }
   .node textarea, .node .out {
-    flex: 1; width: 100%; border: 0; outline: none; resize: none;
+    /* flex-basis:0 + min-height:0 提供收缩基线，不用 height:0
+       —— height:0 会压过 align-self:stretch，使横向容器里的子项高度变 0。 */
+    flex: 1 1 0; min-height: 0; min-width: 0;
+    width: 100%; border: 0; outline: none; resize: none;
     padding: 9px; font-size: 13.5px; line-height: 1.6;
     font-family: ui-monospace, Menlo, Consolas, monospace;
     background: transparent; color: #222;
+    overflow-y: auto; overscroll-behavior: contain;
+    scrollbar-width: thin;
   }
-  .node .out { font-family: inherit; white-space: pre-wrap; overflow-y: auto; }
+  .node .out {
+    font-family: inherit; white-space: pre-wrap;
+    overflow-wrap: anywhere; word-break: break-word;
+  }
   .node .out.empty::before { content: "（执行结果会出现在这里）"; color: #b3b6bb; }
+
+  /* ---------- Markdown 预览 ---------- */
+  .node .md-view {
+    flex: 1 1 0; min-height: 0; min-width: 0;
+    padding: 9px 11px; font-size: 13.5px; line-height: 1.65;
+    color: #222; overflow-y: auto; overscroll-behavior: contain;
+    scrollbar-width: thin; cursor: text;
+    overflow-wrap: anywhere; word-break: break-word;
+  }
+  .node .md-view[hidden] { display: none; }
+  .md-view > :first-child { margin-top: 0; }
+  .md-view > :last-child { margin-bottom: 0; }
+  .md-view h1, .md-view h2, .md-view h3,
+  .md-view h4, .md-view h5, .md-view h6 {
+    margin: 12px 0 6px; line-height: 1.3; font-weight: 700; color: #111;
+  }
+  .md-view h1 { font-size: 19px; }
+  .md-view h2 { font-size: 17px; }
+  .md-view h3 { font-size: 15px; }
+  .md-view h4, .md-view h5, .md-view h6 { font-size: 13.5px; color: #333; }
+  .md-view p { margin: 6px 0; }
+  .md-view ul, .md-view ol { margin: 6px 0; padding-left: 1.5em; }
+  .md-view li { margin: 2px 0; }
+  .md-view li > ul, .md-view li > ol { margin: 2px 0; }
+  .md-view code {
+    font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 12.5px;
+    background: #f1f2f5; border-radius: 4px; padding: 1px 4px;
+  }
+  .md-view pre {
+    margin: 8px 0; padding: 8px 10px; background: #f6f7f9;
+    border: 1px solid #e6e8ec; border-radius: 8px;
+    overflow-x: auto; overscroll-behavior-x: contain;
+  }
+  .md-view pre code {
+    background: none; padding: 0; font-size: 12.5px; line-height: 1.55;
+    white-space: pre;
+  }
+  .md-view blockquote {
+    margin: 8px 0; padding: 2px 0 2px 10px;
+    border-left: 3px solid #d5d7db; color: #666;
+  }
+  .md-view hr { border: 0; border-top: 1px solid #e6e8ec; margin: 12px 0; }
+  .md-view a { color: var(--accent); text-decoration: underline; }
+  .md-view a:hover { color: #3730a3; }
+  .md-view .md-empty { color: #b3b6bb; }
+
+  /* 预览切换按钮（节点标题栏） */
+  .node .md-toggle {
+    flex: none; border: 1px solid var(--border); background: #fff;
+    color: #555; font-size: 10.5px; line-height: 1; border-radius: 5px;
+    padding: 3px 6px; cursor: pointer; font-family: inherit;
+  }
+  .node .md-toggle:hover { border-color: var(--accent); color: var(--accent); }
+  .node.previewing .md-toggle { background: rgba(79,70,229,.12); border-color: var(--accent); color: var(--accent); }
+
+  /* 对话气泡里的 Markdown */
+  .msg .msg-md > :first-child { margin-top: 0; }
+  .msg .msg-md > :last-child { margin-bottom: 0; }
+  .msg .msg-md h1, .msg .msg-md h2, .msg .msg-md h3 {
+    margin: 10px 0 5px; font-size: 14.5px; font-weight: 700;
+  }
+  .msg .msg-md p { margin: 5px 0; }
+  .msg .msg-md ul, .msg .msg-md ol { margin: 5px 0; padding-left: 1.4em; }
+  .msg .msg-md code {
+    font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 12px;
+    background: rgba(0,0,0,.06); border-radius: 4px; padding: 1px 4px;
+  }
+  .msg .msg-md pre {
+    margin: 6px 0; padding: 7px 9px; background: rgba(0,0,0,.05);
+    border-radius: 7px; overflow-x: auto; overflow-wrap: normal;
+  }
+  .msg .msg-md pre code { background: none; padding: 0; white-space: pre; }
+  .msg .msg-md blockquote {
+    margin: 6px 0; padding-left: 9px; border-left: 3px solid rgba(0,0,0,.15);
+    color: #555;
+  }
+  .msg .msg-md a { color: var(--accent); text-decoration: underline; }
 
   /* 图片节点 */
   .node[data-kind="img"] .body { overflow: hidden; background:
@@ -285,16 +457,32 @@
   .node[data-kind="img"].has-img .img-drop { display: none; }
   .node.drop-target { outline: 3px dashed var(--accent); outline-offset: 2px; }
 
-  /* ---------- 端口（连线锚点）---------- */
+  /* ---------- 端口（连线锚点，可视提示）---------- */
   .port {
     position: absolute; width: 14px; height: 14px; border-radius: 50%;
     background: #fff; border: 2px solid var(--accent);
     top: 50%; transform: translateY(-50%);
     cursor: crosshair; z-index: 4;
+    opacity: .55;                     /* 视觉上收敛，不喧宾夺主 */
+    transition: opacity .15s, transform .15s;
+    touch-action: none;
   }
+  /* 热区：透明扩大的命中范围，让手指也能压中 */
+  .port::after {
+    content: ''; position: absolute; inset: -12px; border-radius: 50%;
+  }
+  .node:hover .port { opacity: 1; }
   .port:hover { background: var(--accent); transform: translateY(-50%) scale(1.25); }
-  .port.in  { left: -8px; }
-  .port.out { right: -8px; }
+  .port.port-in  { left: -8px; }
+  .port.port-out { right: -8px; }
+
+  /* 边框热条带：节点四边各一条不可见条带，手指沿边走都能拖出连线 */
+  .edge-hot { position: absolute; z-index: 3; }
+  .edge-hot[data-side="left"]   { left: -9px;   top: 12px; bottom: 12px; width: 12px; cursor: crosshair; }
+  .edge-hot[data-side="right"]  { right: -9px;  top: 12px; bottom: 12px; width: 12px; cursor: crosshair; }
+  .edge-hot[data-side="top"]    { top: -9px;    left: 12px; right: 12px; height: 12px; cursor: crosshair; }
+  .edge-hot[data-side="bottom"] { bottom: -9px; left: 12px; right: 12px; height: 12px; cursor: crosshair; }
+  .edge-hot:hover { background: rgba(79,70,229,.14); }
 
   /* 右下角缩放手柄 */
   .resize-handle {
@@ -310,20 +498,28 @@
     position: absolute; left: 16px; bottom: 16px; z-index: 20;
     display: flex; gap: 8px; align-items: center; flex-wrap: wrap;
     background: #fff; padding: 8px 10px; border-radius: 12px;
-    box-shadow: 0 3px 16px rgba(0,0,0,.12); font-size: 13px; max-width: calc(100% - 32px);
+    box-shadow: 0 3px 16px rgba(0,0,0,.12); font-size: 13px;
+    /* 为右侧 #viewctl 让出空间，否则窄屏下会重叠并遮住缩放按钮。
+       用 max(...) 保证下限：可用宽度不足时 calc 会变负数，
+       导致工具栏被压成一条竖线（按钮逐字换行）。 */
+    max-width: max(240px, calc(100% - 32px - 260px));
   }
   button {
     border: 0; border-radius: 8px; padding: 7px 13px; font-size: 13px;
     background: var(--accent); color: #fff; cursor: pointer; font-weight: 600;
   }
   button:disabled { background: #b9bbc3; cursor: not-allowed; }
+  button.running { background: #f59e0b; }
+  button.running:hover { background: #d97706; }
   button.ghost { background: #eef0f3; color: #333; }
   button.ghost:hover { background: #e2e5ea; }
   input.key {
     padding: 7px 9px; border: 1px solid #d5d7db; border-radius: 8px;
     font-size: 13px; width: 230px;
   }
-  #hint { color: #777; font-size: 12px; line-height: 1.5; }
+  /* 纯说明文字，不参与交互：它覆盖在工具栏上方，
+     默认会被命中并拦住按钮的指针事件。 */
+  #hint { color: #777; font-size: 12px; line-height: 1.5; pointer-events: none; }
   kbd {
     background: #f0f1f3; border: 1px solid #d5d7db; border-bottom-width: 2px;
     border-radius: 4px; padding: 0 5px; font-size: 11px; font-family: inherit;
@@ -331,7 +527,7 @@
 
   /* 右下角视图控件 */
   #viewctl {
-    position: absolute; right: 16px; bottom: 16px; z-index: 20;
+    position: absolute; right: 16px; bottom: 16px; z-index: 22;   /* 高于 #toolbar(20)，避免被其遮盖 */
     display: flex; gap: 6px; align-items: center;
     background: #fff; padding: 6px; border-radius: 10px;
     box-shadow: 0 3px 16px rgba(0,0,0,.12);
@@ -430,7 +626,7 @@
 /* =========================================================================
    移动端 / 平板适配（窄屏时侧栏改为浮层抽屉，画布全屏）
    ========================================================================= */
-@media (max-width: 768px) {
+@media (max-width: 1024px) {
   /* 侧栏脱离文档流，浮在画布上 */
   #outline, #sidebar {
     position: absolute; top: 0; bottom: 0; z-index: 50;
@@ -454,11 +650,31 @@
   #outline.collapsed .ol-body, #sidebar.collapsed .sb-body { display: block; }
 
   /* 工具栏：缩小、允许换行、贴左上角 */
-  #toolbar { flex-wrap: wrap; gap: 4px; padding: 6px; max-width: calc(100vw - 16px); }
-  #toolbar button { font-size: 12px; padding: 6px 8px; }
+  /* 平板/中等宽度：工具栏全宽贴底，按钮横向滚动，避免被挤成竖排 */
+  #toolbar {
+    left: 8px; right: 8px; bottom: 8px; padding: 6px;
+    max-width: none; flex-wrap: nowrap; overflow-x: auto;
+    overscroll-behavior-x: contain; scrollbar-width: thin;
+    gap: 6px;
+  }
+  #toolbar > * { flex: none; }
+  #toolbar button { font-size: 12px; padding: 6px 8px; white-space: nowrap; }
+  /* 窄屏隐藏长提示：它会把工具栏撑成两层，在平板上太占地方 */
+  #toolbar #hint { display: none; }
+  /* 窄屏：视图控件缩小并上移，给工具栏留出底部空间，避免重叠遮挡 */
+  #viewctl { bottom: auto; top: 56px; right: 8px; padding: 4px; gap: 4px; }
+  #viewctl button { padding: 5px 7px; font-size: 11px; }
+  #zoomLabel { min-width: 34px; font-size: 11px; }
 
-  /* 节点内的端口/手柄加大，方便手指点中 */
-  .port { width: 18px; height: 18px; }
+  /* 节点内的端口/手柄加大，方便手指点中；边框条带也加宽 */
+  .port { width: 18px; height: 18px; opacity: 1; }
+  .port::after { inset: -14px; }
+  .edge-hot[data-side="left"], .edge-hot[data-side="right"] { width: 18px; top: 14px; bottom: 14px; }
+  .edge-hot[data-side="left"] { left: -12px; }
+  .edge-hot[data-side="right"] { right: -12px; }
+  .edge-hot[data-side="top"], .edge-hot[data-side="bottom"] { height: 18px; left: 14px; right: 14px; }
+  .edge-hot[data-side="top"] { top: -12px; }
+  .edge-hot[data-side="bottom"] { bottom: -12px; }
 
   /* 小地图在窄屏隐藏（避免遮挡） */
   #minimap { display: none !important; }
@@ -469,9 +685,9 @@
 
 /* 触摸设备：禁用长按选择/系统菜单，提升拖动体验 */
 @media (pointer: coarse) {
-  .node, .zone, .port, .resize-handle, .zone-resize {
+  .node, .zone, .port, .resize-handle, .zone-resize, .edge-hot {
     -webkit-user-select: none; user-select: none;
     -webkit-touch-callout: none;
   }
-  .port { touch-action: none; }
+  .port, .edge-hot { touch-action: none; }
 }

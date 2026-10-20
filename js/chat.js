@@ -1,5 +1,6 @@
 import { API_URL, DBG, PREFIX, state } from './state.js';
 import { redrawEdges } from './edges.js';
+import { renderMarkdown } from './md.js';
 import { drawMiniMap } from './minimap.js';
 // 11.8 画布序列化 —— 让对话能“识别整张图”
 // =========================================================================
@@ -102,10 +103,26 @@ export function addMsg(role, text, meta) {
     m.className = 'meta'; m.textContent = meta;
     el.appendChild(m);
   }
-  el.appendChild(document.createTextNode(text));
+  // 助手回复渲染 Markdown；用户消息保持纯文本（避免其 Markdown 被误解为指令）
+  if (role === 'assistant' && text) {
+    const md = document.createElement('div');
+    md.className = 'msg-md';
+    md.innerHTML = renderMarkdown(text);
+    el.appendChild(md);
+  } else {
+    el.appendChild(document.createTextNode(text));
+  }
   box.appendChild(el);
   box.scrollTop = box.scrollHeight;
   return el;
+}
+
+// 流式更新助手气泡内容（保留 meta 节点）
+export function setMsgText(el, text) {
+  if (!el) return;
+  const md = el.querySelector('.msg-md');
+  if (md) { md.innerHTML = renderMarkdown(text); return; }
+  el.textContent = text;
 }
 
 // 发送消息：自动把画布快照(+可选图片)拼入上下文
@@ -163,7 +180,7 @@ export async function sendChat() {
   const btn = document.getElementById('sendMsg');
   btn.disabled = true;
   const bubble = addMsg('assistant', '', '助手');
-  bubble.textContent = '…';
+  setMsgText(bubble, '…');
 
   let full = '';
   try {
@@ -190,7 +207,7 @@ export async function sendChat() {
         try {
           const j = JSON.parse(p);
           const d = j.choices?.[0]?.delta?.content || '';
-          if (d) { full += d; bubble.textContent = full; }
+          if (d) { full += d; setMsgText(bubble, full); }
         } catch {}
       }
     }
@@ -199,7 +216,7 @@ export async function sendChat() {
   } catch (err) {
     DBG.err('对话失败:', err);
     bubble.className = 'msg error';
-    bubble.textContent = '❌ ' + err.message;
+    bubble.textContent = '❌ ' + err.message;   // 错误消息保持纯文本
   } finally {
     chat.busy = false;
     btn.disabled = false;

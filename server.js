@@ -91,6 +91,16 @@ const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; cha
   '.css': 'text/css; charset=utf-8', '.json': 'application/json; charset=utf-8',
   '.png': 'image/png', '.jpg': 'image/jpeg', '.svg': 'image/svg+xml' };
 
+// 本地开发服务器：明确禁止缓存。
+// 没有这几个头时浏览器会走「启发式缓存」，改完 js/css 普通刷新拿到的仍是旧文件，
+// 必须强制刷新才能看到改动，容易误判成功能没生效。
+// Pragma / Expires 给只认 HTTP/1.0 头的老代理兜底。
+const NO_CACHE = {
+  'Cache-Control': 'no-store, must-revalidate',
+  'Pragma': 'no-cache',
+  'Expires': '0',
+};
+
 const server = http.createServer(async (req, res) => {
   const u = new URL(req.url, 'http://' + (req.headers.host || 'localhost'));
   const cors = {
@@ -109,16 +119,16 @@ const server = http.createServer(async (req, res) => {
       try { target = JSON.parse(chunk).url; } catch { /* ignore */ }
     }
     if (!target) {
-      res.writeHead(400, { ...cors, 'Content-Type': 'application/json' });
+      res.writeHead(400, { ...cors, ...NO_CACHE, 'Content-Type': 'application/json' });
       return res.end(JSON.stringify({ error: '缺少 url 参数' }));
     }
     try {
       const data = await fetchPage(target);
-      res.writeHead(200, { ...cors, 'Content-Type': 'application/json; charset=utf-8' });
+      res.writeHead(200, { ...cors, ...NO_CACHE, 'Content-Type': 'application/json; charset=utf-8' });
       res.end(JSON.stringify(data));
       console.log(`[proxy] ${target} -> ${data.text.length} 字`);
     } catch (e) {
-      res.writeHead(502, { ...cors, 'Content-Type': 'application/json; charset=utf-8' });
+      res.writeHead(502, { ...cors, ...NO_CACHE, 'Content-Type': 'application/json; charset=utf-8' });
       res.end(JSON.stringify({ error: String(e.message || e) }));
       console.log(`[proxy] 失败 ${target}: ${e.message}`);
     }
@@ -129,9 +139,16 @@ const server = http.createServer(async (req, res) => {
   let filePath = u.pathname === '/' ? '/index.html' : u.pathname;
   filePath = path.join(ROOT, path.normalize(filePath).replace(/^(\.\.[/\\])+/, ''));
   fs.readFile(filePath, (err, buf) => {
-    if (err) { res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' }); return res.end('Not found'); }
+    if (err) {
+      // 404 也禁缓存，否则修好文件后仍会看到旧的错误
+      res.writeHead(404, { ...NO_CACHE, 'Content-Type': 'text/plain; charset=utf-8' });
+      return res.end('Not found');
+    }
     const ext = path.extname(filePath).toLowerCase();
-    res.writeHead(200, { 'Content-Type': MIME[ext] || 'application/octet-stream' });
+    res.writeHead(200, {
+      'Content-Type': MIME[ext] || 'application/octet-stream',
+      ...NO_CACHE,
+    });
     res.end(buf);
   });
 });

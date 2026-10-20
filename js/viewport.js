@@ -41,6 +41,34 @@ export function zoomAt(screenX, screenY, factor) {
 export function panBy(dx, dy) { view.x += dx; view.y += dy; applyView(); }
 
 // 让所有内容居中且刚好容纳
+// 可见区尺寸：优先用 #canvasWrap（侧栏占位后的真实可见区域），
+// 用 #canvas 会把中心算偏，导致内容跑到侧栏下面。
+function visibleRect() {
+  const wrap = document.getElementById('canvasWrap');
+  const el = wrap || canvasEl();
+  const r = el.getBoundingClientRect();
+  // 与 canvasEl 的坐标差（#canvas 是绝对定位全屏层）
+  const cr = canvasEl().getBoundingClientRect();
+  return { left: r.left - cr.left, top: r.top - cr.top, width: r.width, height: r.height };
+}
+
+// 只居中，不改缩放
+export function centerContent() {
+  const nodes = Object.values(state.nodes);
+  const r = visibleRect();
+  if (!nodes.length) { view.x = 0; view.y = 0; applyView(); return; }
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  for (const n of nodes) {
+    minX = Math.min(minX, n.x); minY = Math.min(minY, n.y);
+    maxX = Math.max(maxX, n.x + n.w); maxY = Math.max(maxY, n.y + n.h);
+  }
+  const cw = (maxX - minX) * view.scale;
+  const ch = (maxY - minY) * view.scale;
+  view.x = (r.width  - cw) / 2 - minX * view.scale;
+  view.y = (r.height - ch) / 2 - minY * view.scale;
+  applyView();
+}
+
 export function fitToContent(padding = 60) {
   const nodes = Object.values(state.nodes);
   if (!nodes.length) { view.x = 0; view.y = 0; view.scale = 1; applyView(); return; }
@@ -49,13 +77,22 @@ export function fitToContent(padding = 60) {
     minX = Math.min(minX, n.x); minY = Math.min(minY, n.y);
     maxX = Math.max(maxX, n.x + n.w); maxY = Math.max(maxY, n.y + n.h);
   }
-  const r = canvasEl().getBoundingClientRect();
+  const r = visibleRect();
+  // 窄屏时减小边距，并给底部工具栏留出高度，避免内容被遮或缩得过小
+  // 窄屏/平板（与 CSS 断点 1024px 对齐）：缩小边距，并给底部工具栏留高度。
+  // 工具栏在 ≤1024px 时贴底横滑，约 50px 高。
+  const narrow = r.width < 1024;
+  const pad = narrow ? 20 : padding;
+  const bottomInset = narrow ? 80 : 0;
+  const usableW = Math.max(80, r.width - pad * 2);
+  const usableH = Math.max(80, r.height - pad * 2 - bottomInset);
   const cw = maxX - minX, ch = maxY - minY;
-  const sx = (r.width  - padding * 2) / cw;
-  const sy = (r.height - padding * 2) / ch;
-  view.scale = Math.min(2, Math.max(0.15, Math.min(sx, sy)));
+  const sx = usableW / cw;
+  const sy = usableH / ch;
+  // 不超过 1.0：放大到 100% 以上没意义，反而丢失全局感
+  view.scale = Math.min(1, Math.max(0.15, Math.min(sx, sy)));
   view.x = (r.width  - cw * view.scale) / 2 - minX * view.scale;
-  view.y = (r.height - ch * view.scale) / 2 - minY * view.scale;
+  view.y = (r.height - bottomInset - ch * view.scale) / 2 - minY * view.scale;
   applyView();
 }
 

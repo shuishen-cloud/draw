@@ -4,43 +4,130 @@ import { drawMiniMap } from './minimap.js';
 import { applyFilter } from './outline.js';
 import { toggleEdgeInTask } from './tasks.js';
 import { screenToWorld, worldEl } from './viewport.js';
-// 6. 连线：从端口拖出
+import {
+  anchorSide, edgeEndpoints, bezierPath, hitTest, nearestBorderPoint,
+} from './geom.js';
+// 6. 连线：任意节点、任意锚点拖出
 // =========================================================================
+const DRAG_THRESHOLD = 8;   // 屏幕像素；超过才认为是「拖出连线」而非点击/拖节点
+
+// 命中容差：屏幕上约 12px，换算到 world 才能与缩放无关
+export function hitTolerance() {
+  return 12 / (view.scale || 1);
+}
+
+// 端口的 pointerdown：先按兵不动，拖出阈值后才真正开始连线
+export function bindLinkHandle(node, el) {
+  el.addEventListener('pointerdown', (e) => {
+    if (e.button !== undefined && e.button !== 0) return;
+    e.stopPropagation();
+    e.preventDefault();
+    const sx = e.clientX, sy = e.clientY;
+    let started = false;
+    function onMove(ev) {
+      if (started) return;
+      if (Math.hypot(ev.clientX - sx, ev.clientY - sy) < DRAG_THRESHOLD) return;
+      started = true;
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+      window.removeEventListener('pointercancel', onCancel);
+      startLinkFrom(node, ev);
+    }
+    function onUp() {
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+      window.removeEventListener('pointercancel', onCancel);
+    }
+    function onCancel() { onUp(); }
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onUp);
+    window.addEventListener('pointercancel', onCancel);
+  });
+}
+
+// 从节点上任意位置开始拉线；fromPoint 为 pointerdown 的屏幕坐标
+// （也可由 pointermove 触发，此时按 ev 当前点定锚点）
 export function startLinkFrom(node, e) {
-  // 用 world 坐标（因为预览线画在 #edges 里，而 #edges 在 #world 中）
-  function endpointXY(ofNode) {
-    return { x: ofNode.x + ofNode.w, y: ofNode.y + ofNode.h / 2 };
-  }
-  const s = endpointXY(node);
-  const p = screenToWorld(e.clientX, e.clientY);
-  linkState.pending = { source: node.id, x1: s.x, y1: s.y, x2: p.x, y2: p.y };
+  const p0 = screenToWorld(e.clientX, e.clientY);
+  // 起点锚在节点「最近的那条边」上：手指按在哪侧就从哪侧出发
+  const anchor = nearestBorderPoint(node, p0.x, p0.y);
+  linkState.pending = {
+    source: node.id,
+    x1: anchor.x, y1: anchor.y,
+    x2: p0.x, y2: p0.y,
+    targetId: null,
+  };
+  DBG.log('起连', node.id, '锚点', Math.round(anchor.x), Math.round(anchor.y));
+  drawGhost(linkState.pending);
+
+  const list = () => Object.values(state.nodes)
+    .filter(n => n.id !== node.id)
+    .map(n => ({ id: n.id, x: n.x, y: n.y, w: n.w, h: n.h }));
+
   function onMove(ev) {
-    if (!linkState.pending) return;
+    const pending = linkState.pending;
+    if (!pending || pending.source !== node.id) return;
     const q = screenToWorld(ev.clientX, ev.clientY);
-    linkState.pending.x2 = q.x;
-    linkState.pending.y2 = q.y;
-    drawGhost(linkState.pending);
+    pending.x2 = q.x;
+    pending.y2 = q.y;
+    // 实时高亮候选目标（落在边框带内即算）
+    const hitId = hitTest(list(), q.x, q.y, hitTolerance());
+    if (hitId !== pending.targetId) {
+      clearLinkHighlight();
+      if (hitId) {
+        state.nodes[hitId]?.el.classList.add('link-target');
+        DBG.log('候选目标', hitId);
+      }
+      pending.targetId = hitId;
+    }
+    drawGhost(pending);
   }
+
   function onUp(ev) {
-    window.removeEventListener('pointermove', onMove);
-    window.removeEventListener('pointerup', onUp);
-    // 若松开时落在某个节点上，则正式建边
-    const target = findNodeAt(ev.clientX, ev.clientY);
+    cleanup();
+    const pending = linkState.pending;
     linkState.pending = null;
     drawGhost(null);
-    if (target && target.id !== node.id) {
-      addEdge(node.id, target.id);
-    } else {
-      DBG.log('连线取消（未落在有效节点上）');
-    }
+    clearLinkHighlight();
+    if (!pending) return;
+    const q = screenToWorld(ev.clientX, ev.clientY);
+    // 松手位置重新判定一次（move 可能没跟上最后一帧）
+    const hitId = hitTest(list(), q.x, q.y, hitTolerance());
+    if (!hitId) { DBG.log('连线取消：落在空白'); return; }
+    if (hitId === node.id) { DBG.log('连线取消：落在自身'); return; }
+    addEdge(node.id, hitId);
+    DBG.log('建边', node.id, '->', hitId);
   }
+
+  function onCancel() {
+    cleanup();
+    linkState.pending = null;
+    drawGhost(null);
+    clearLinkHighlight();
+    DBG.log('连线取消：pointercancel');
+  }
+
+  function cleanup() {
+    window.removeEventListener('pointermove', onMove);
+    window.removeEventListener('pointerup', onUp);
+    window.removeEventListener('pointercancel', onCancel);
+    window.removeEventListener('blur', onCancel);
+  }
+
   window.addEventListener('pointermove', onMove);
   window.addEventListener('pointerup', onUp);
+  window.addEventListener('pointercancel', onCancel);
+  window.addEventListener('blur', onCancel);
+}
+
+// 清掉所有节点的候选高亮
+export function clearLinkHighlight() {
+  document.querySelectorAll('.node.link-target')
+    .forEach(el => el.classList.remove('link-target'));
 }
 
 export function finishLinkTo(node) {
-  // 由 linkState.pending 的 mouseup 处理，这里作为兜底入口（端口松手）
-  // 实际逻辑在 startLinkFrom 的 onUp 中，通过坐标命中判断。
+  // 由 startLinkFrom 的 pointerup 统一处理（按坐标命中判定）
   void node;
 }
 
@@ -71,36 +158,48 @@ export function edgeGeometry(edge) {
   const a = state.nodes[edge.source];
   const b = state.nodes[edge.target];
   if (!a || !b) return null;
-  // 直接使用 world 坐标（节点在 world 中，边也画在 world 中）
-  const x1 = a.x + a.w, y1 = a.y + a.h / 2;
-  const x2 = b.x,       y2 = b.y + b.h / 2;
-  return { x1, y1, x2, y2 };
+  // 两端都取「朝向对方那条边」的中点，线永远连在边上（world 坐标）
+  const g = edgeEndpoints(a, b);
+  g.from = anchorSide(a, g.x1, g.y1);
+  g.to = anchorSide(b, g.x2, g.y2);
+  return g;
 }
 
-export function edgePath({ x1, y1, x2, y2 }) {
-  const mx = (x1 + x2) / 2;
-  return `M ${x1} ${y1} C ${mx} ${y1}, ${mx} ${y2}, ${x2} ${y2}`;
+// 连线路径（对外接口名保持 edgePath，内部走 geom.bezierPath）
+export function edgePath(g) {
+  return bezierPath(g);
 }
 
+// 增量渲染：复用已有 DOM，只更新 d 与 class。
+// 这样 running 的流动动画不会因为重绘被打断。
 export function redrawEdges() {
   const svg = document.getElementById('edges');
-  svg.innerHTML = '';
+  const seen = new Set();
   for (const edge of Object.values(state.edges)) {
     const g = edgeGeometry(edge);
     if (!g) continue;
+    seen.add(edge.id);
+    let p = edge.pathEl;
+    if (!p || !p.isConnected) {
+      p = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+      p.dataset.edge = edge.id;
+      p.addEventListener('click', () => selectEdge(edge.id));
+      p.addEventListener('dblclick', () => editEdgeLabel(edge));
+      svg.appendChild(p);
+      edge.pathEl = p;
+    }
     const executable = edge.command.trim().startsWith(PREFIX);
-    const p = document.createElementNS('http://www.w3.org/2000/svg', 'path');
     p.setAttribute('d', edgePath(g));
     p.setAttribute('class', 'wire'
       + (executable ? ' executable' : '')
       + (state.selectedEdgeId === edge.id ? ' selected' : '')
-      + (edge.running ? ' running' : ''));
-    p.dataset.edge = edge.id;
-    p.addEventListener('click', () => selectEdge(edge.id));
-    p.addEventListener('dblclick', () => editEdgeLabel(edge));
-    svg.appendChild(p);
-    edge.pathEl = p;
+      + (edge.running ? ' running' : '')          // 动画只靠 class 驱动
+      + (edge.flash ? ' flash-' + edge.flash : ''));
     layoutEdgeLabel(edge);
+  }
+  // 移除已删除的边
+  for (const p of svg.querySelectorAll('path.wire')) {
+    if (!seen.has(p.dataset.edge)) p.remove();
   }
   drawMiniMap();
   applyFilter();   // 重画后重新应用层级过滤（淡出非当前层）
@@ -113,9 +212,14 @@ export function drawGhost(link) {
   if (!ghost) {
     ghost = document.createElementNS('http://www.w3.org/2000/svg', 'path');
     ghost.setAttribute('class', 'ghost');
+    ghost.setAttribute('pointer-events', 'none');
     svg.appendChild(ghost);
   }
-  ghost.setAttribute('d', edgePath(link));
+  // 预览线：起点在源节点锚点，终点跟随手指
+  ghost.setAttribute('d', bezierPath({
+    x1: link.x1, y1: link.y1, x2: link.x2, y2: link.y2,
+    from: 'auto', to: 'auto',
+  }));
 }
 
 // =========================================================================

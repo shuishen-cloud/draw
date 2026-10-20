@@ -1,5 +1,6 @@
 import { API_URL, DBG, PREFIX, state } from './state.js';
 import { redrawEdges } from './edges.js';
+import { renderMarkdown } from './md.js';
 // 9. 执行核心
 // =========================================================================
 export async function runEdge(edgeId) {
@@ -40,9 +41,22 @@ export async function runEdge(edgeId) {
   setOutput(dst, '');
   dst.textEl.classList.remove('empty');
   edge.running = true;
+  dst.el?.classList.add('running');     // 目标节点脉冲，让用户看到在跑哪个
   redrawEdges();
-  const outText = await streamLLM({ key, promptText, doc, images, onDelta: (t) => setOutput(dst, t) });
+  // 流式输出期间节流重绘：目标节点内容增长会改变尺寸，线要及时跟上，
+  // 但不要每帧重绘（会拖慢渲染）。running 动画靠 class 维持，不受重绘影响。
+  let redrawQueued = false;
+  const scheduleRedraw = () => {
+    if (redrawQueued) return;
+    redrawQueued = true;
+    requestAnimationFrame(() => { redrawQueued = false; redrawEdges(); });
+  };
+  const outText = await streamLLM({
+    key, promptText, doc, images,
+    onDelta: (t) => { setOutput(dst, t); scheduleRedraw(); },
+  });
   edge.running = false;
+  dst.el?.classList.remove('running');
   redrawEdges();
   DBG.log('========== runEdge', edgeId, '结束，输出', outText.length, '字符 ==========');
 }
@@ -63,15 +77,31 @@ export function setOutput(node, text) {
     }
   }
   // 图片节点：不支持写入文本，忽略
+
+  // 若该节点正处于 Markdown 预览态，实时跟着刷新（否则流式输出时预览是冻结的）
+  if (node.el?.dataset.mode === 'preview') {
+    const src = [node.text || '', node.prompt || ''].filter(Boolean).join('\n\n');
+    const v = node.el.querySelector('.md-view');
+    if (v) v.innerHTML = renderMarkdown(src) || '<p class="md-empty">（无内容）</p>';
+  }
 }
 
 export function flashEdge(edge, type) {
-  if (!edge.pathEl) return;
-  const old = edge.pathEl.getAttribute('stroke');
-  edge.pathEl.setAttribute('stroke', type === 'skip' ? '#dc2626' : '#16a34a');
-  edge.pathEl.setAttribute('stroke-width', '4');
-  setTimeout(() => redrawEdges(), 600);
-  void old;
+  // 先设状态再重绘：重绘会按 edge.flash 同步 class，保证绑到当前的 path 元素上
+  edge.flash = type === 'skip' ? 'skip' : 'ok';
+  redrawEdges();
+  if (!edge.pathEl) { edge.flash = null; return; }
+  const p = edge.pathEl;
+  let done = false;
+  const finish = () => {
+    if (done) return;
+    done = true;
+    p.removeEventListener('animationend', finish);
+    edge.flash = null;
+    redrawEdges();
+  };
+  p.addEventListener('animationend', finish);
+  setTimeout(finish, 1200);   // 兜底：动画未触发（如偏好减少动态效果）也恢复
 }
 
 // =========================================================================
