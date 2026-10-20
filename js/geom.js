@@ -35,14 +35,18 @@ export function distanceToRect(px, py, r) {
 }
 
 // 命中判定：点落在矩形及其外扩 tol 的带内（含矩形内部）。
-// 返回命中的节点 id（多个重叠时取距离最近者），否则 null。
+// 多个节点重叠时：先取距离最近者；距离相同（嵌套导致都是 0）时取面积更小者
+// ——即更「贴合」的那一个，符合「手指按在哪个节点的边上」的直觉。
+// 返回命中的节点 id，否则 null。
 export function hitTest(nodes, px, py, tol = 12) {
-  let best = null, bestDist = Infinity;
+  let best = null, bestDist = Infinity, bestArea = Infinity;
   for (const n of nodes) {
     const d = distanceToRect(px, py, n);
     if (d > tol) continue;
-    // 命中的平手时，优先「内部」的节点（d 更小者天然胜出）
-    if (d < bestDist) { bestDist = d; best = n.id; }
+    const area = n.w * n.h;
+    if (d < bestDist - 1e-9 || (Math.abs(d - bestDist) <= 1e-9 && area < bestArea)) {
+      bestDist = d; bestArea = area; best = n.id;
+    }
   }
   return best;
 }

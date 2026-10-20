@@ -206,11 +206,25 @@
   }
   svg#edges .wire { fill: none; stroke: var(--line); stroke-width: 2.5; pointer-events: stroke; cursor: pointer; }
   svg#edges .wire:hover { stroke: #6b7280; }
+  svg#edges .wire.selected { stroke: #6b7280; stroke-width: 3.5; }
   svg#edges .wire.executable { stroke: var(--accent); stroke-width: 3.5; }
-  svg#edges .wire.running { stroke: #f59e0b; stroke-dasharray: 6 5; animation: dash .6s linear infinite; }
-  @keyframes dash { to { stroke-dashoffset: -11; } }
-  /* 临时拖拽预览线 */
-  svg#edges .ghost { stroke: var(--accent); stroke-width: 2; stroke-dasharray: 5 5; }
+  /* 执行中：虚线沿路径流动。动画只由 class 驱动，元素被复用不会重置。 */
+  svg#edges .wire.running {
+    stroke: #f59e0b; stroke-width: 4; stroke-linecap: round;
+    stroke-dasharray: 8 6;
+    animation: wire-flow .55s linear infinite;
+  }
+  @keyframes wire-flow { from { stroke-dashoffset: 0; } to { stroke-dashoffset: -14; } }
+  /* 闪烁反馈（跳过 / 成功） */
+  svg#edges .wire.flash-skip { stroke: #dc2626; stroke-width: 4; animation: wire-flash .6s ease-out 2; }
+  svg#edges .wire.flash-ok   { stroke: #16a34a; stroke-width: 4; animation: wire-flash .6s ease-out 2; }
+  @keyframes wire-flash { 0%, 100% { opacity: 1; } 50% { opacity: .25; } }
+  /* 临时拖拽预览线：流动虚线，表明「还在拖」 */
+  svg#edges .ghost {
+    stroke: var(--accent); stroke-width: 2.5;
+    stroke-dasharray: 6 5; stroke-linecap: round;
+    animation: wire-flow .55s linear infinite;
+  }
 
   /* 连线上的命令标签 —— 直接就地编辑 */
   .edge-label {
@@ -245,6 +259,12 @@
     overflow: visible;
   }
   .node.selected { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(79,70,229,.15), 0 2px 10px rgba(0,0,0,.06); }
+  /* 拖线时的候选落点：整圈高亮，告诉用户「松手就连到这里」 */
+  .node.link-target {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 4px rgba(79,70,229,.28), 0 2px 10px rgba(0,0,0,.06);
+  }
+  .node.link-target .bar { background: rgba(79,70,229,.12); }
   .node .bar {
     display: flex; align-items: center; gap: 6px;
     padding: 5px 8px; font-size: 12px; font-weight: 600; color: #555;
@@ -285,16 +305,32 @@
   .node[data-kind="img"].has-img .img-drop { display: none; }
   .node.drop-target { outline: 3px dashed var(--accent); outline-offset: 2px; }
 
-  /* ---------- 端口（连线锚点）---------- */
+  /* ---------- 端口（连线锚点，可视提示）---------- */
   .port {
     position: absolute; width: 14px; height: 14px; border-radius: 50%;
     background: #fff; border: 2px solid var(--accent);
     top: 50%; transform: translateY(-50%);
     cursor: crosshair; z-index: 4;
+    opacity: .55;                     /* 视觉上收敛，不喧宾夺主 */
+    transition: opacity .15s, transform .15s;
+    touch-action: none;
   }
+  /* 热区：透明扩大的命中范围，让手指也能压中 */
+  .port::after {
+    content: ''; position: absolute; inset: -12px; border-radius: 50%;
+  }
+  .node:hover .port { opacity: 1; }
   .port:hover { background: var(--accent); transform: translateY(-50%) scale(1.25); }
   .port.in  { left: -8px; }
   .port.out { right: -8px; }
+
+  /* 边框热条带：节点四边各一条不可见条带，手指沿边走都能拖出连线 */
+  .edge-hot { position: absolute; z-index: 3; }
+  .edge-hot[data-side="left"]   { left: -9px;   top: 12px; bottom: 12px; width: 12px; cursor: crosshair; }
+  .edge-hot[data-side="right"]  { right: -9px;  top: 12px; bottom: 12px; width: 12px; cursor: crosshair; }
+  .edge-hot[data-side="top"]    { top: -9px;    left: 12px; right: 12px; height: 12px; cursor: crosshair; }
+  .edge-hot[data-side="bottom"] { bottom: -9px; left: 12px; right: 12px; height: 12px; cursor: crosshair; }
+  .edge-hot:hover { background: rgba(79,70,229,.14); }
 
   /* 右下角缩放手柄 */
   .resize-handle {
@@ -457,8 +493,15 @@
   #toolbar { flex-wrap: wrap; gap: 4px; padding: 6px; max-width: calc(100vw - 16px); }
   #toolbar button { font-size: 12px; padding: 6px 8px; }
 
-  /* 节点内的端口/手柄加大，方便手指点中 */
-  .port { width: 18px; height: 18px; }
+  /* 节点内的端口/手柄加大，方便手指点中；边框条带也加宽 */
+  .port { width: 18px; height: 18px; opacity: 1; }
+  .port::after { inset: -14px; }
+  .edge-hot[data-side="left"], .edge-hot[data-side="right"] { width: 18px; top: 14px; bottom: 14px; }
+  .edge-hot[data-side="left"] { left: -12px; }
+  .edge-hot[data-side="right"] { right: -12px; }
+  .edge-hot[data-side="top"], .edge-hot[data-side="bottom"] { height: 18px; left: 14px; right: 14px; }
+  .edge-hot[data-side="top"] { top: -12px; }
+  .edge-hot[data-side="bottom"] { bottom: -12px; }
 
   /* 小地图在窄屏隐藏（避免遮挡） */
   #minimap { display: none !important; }
@@ -469,9 +512,9 @@
 
 /* 触摸设备：禁用长按选择/系统菜单，提升拖动体验 */
 @media (pointer: coarse) {
-  .node, .zone, .port, .resize-handle, .zone-resize {
+  .node, .zone, .port, .resize-handle, .zone-resize, .edge-hot {
     -webkit-user-select: none; user-select: none;
     -webkit-touch-callout: none;
   }
-  .port { touch-action: none; }
+  .port, .edge-hot { touch-action: none; }
 }

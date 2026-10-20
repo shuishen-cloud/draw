@@ -1,5 +1,5 @@
 import { DBG, escapeHtml, seq, state, view } from './state.js';
-import { finishLinkTo, layoutEdgeLabel, redrawEdges, startLinkFrom } from './edges.js';
+import { bindLinkHandle, layoutEdgeLabel, redrawEdges } from './edges.js';
 import { readAsDataURL } from './io1.js';
 import { applyFilter, refreshOutline } from './outline.js';
 import { runExecNode } from './run.js';
@@ -71,8 +71,12 @@ export function renderNode(node) {
       <span class="close" title="删除节点">×</span>
     </div>
     <div class="body"></div>
-    <div class="port in"  title="输入"></div>
-    <div class="port out" title="拖我连线"></div>
+    <div class="port in"  title="输入（可视提示）"></div>
+    <div class="port out" title="拖出连线（整个节点都可拖）"></div>
+    <div class="edge-hot" data-side="left"></div>
+    <div class="edge-hot" data-side="right"></div>
+    <div class="edge-hot" data-side="top"></div>
+    <div class="edge-hot" data-side="bottom"></div>
     <div class="resize-handle" title="拖拽调整大小"></div>
   `;
   el.querySelector('.title').textContent = node.title;
@@ -167,6 +171,7 @@ export function renderNode(node) {
   const bar = el.querySelector('.bar');
   bar.addEventListener('pointerdown', (e) => {
     if (e.target.classList.contains('close')) return;
+    if (e.target.classList.contains('zone-pick')) return;
     selectNode(node.id);
     startDrag(e, node);
   });
@@ -180,17 +185,13 @@ export function renderNode(node) {
     window.scheduleSnapshot?.();
   });
 
-  // 尾部端口：从这里拖出连线
-  el.querySelector('.port.out').addEventListener('pointerdown', (e) => {
-    e.stopPropagation(); e.preventDefault();
-    startLinkFrom(node, e);
+  // 连线：两个端口都是「拖出」热区（视觉上区分左右，语义上不限制方向）
+  bindLinkHandle(node, el.querySelector('.port.out'));
+  bindLinkHandle(node, el.querySelector('.port.in'));
+  // 边框热区：节点四周 8px 的不可见条带，手指粗也能拖出连线
+  el.querySelectorAll('.edge-hot').forEach(hot => {
+    bindLinkHandle(node, hot);
   });
-  // 头部端口：可在此结束连线（也支持直接落在节点上）
-  el.querySelector('.port.in').addEventListener('pointerup', (e) => {
-    e.stopPropagation();
-    finishLinkTo(node);
-  });
-  el.addEventListener('pointerup', () => finishLinkTo(node));
 
   // 缩放手柄
   el.querySelector('.resize-handle').addEventListener('pointerdown', (e) => {

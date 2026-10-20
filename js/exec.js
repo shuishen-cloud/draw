@@ -67,11 +67,17 @@ export function setOutput(node, text) {
 
 export function flashEdge(edge, type) {
   if (!edge.pathEl) return;
-  const old = edge.pathEl.getAttribute('stroke');
-  edge.pathEl.setAttribute('stroke', type === 'skip' ? '#dc2626' : '#16a34a');
-  edge.pathEl.setAttribute('stroke-width', '4');
-  setTimeout(() => redrawEdges(), 600);
-  void old;
+  // 用 class 驱动闪烁，animationend 后自行清除；不再 setTimeout 全量重绘
+  edge.flash = type === 'skip' ? 'skip' : 'ok';
+  redrawEdges();
+  const p = edge.pathEl;
+  const done = () => {
+    p.removeEventListener('animationend', done);
+    edge.flash = null;
+    redrawEdges();
+  };
+  p.addEventListener('animationend', done);
+  setTimeout(done, 1200);   // 兜底：动画未触发也要恢复
 }
 
 // =========================================================================
