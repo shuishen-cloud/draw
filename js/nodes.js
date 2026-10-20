@@ -288,7 +288,12 @@ export function loadImageFile(node, file) {
 // 状态仅存 DOM（node.el.dataset.mode），不写入导出 JSON。
 export function setNodeMode(node, mode) {
   const el = node.el;
-  if (!el) return;
+  if (!el) {
+    // 常见误用：在 renderNode 里、node.el = el 之前调用。
+    // 以前这里静默 return，导致「默认预览」看着设了却不生效。
+    DBG.warn('setNodeMode: 节点 DOM 尚未就绪', node.id, mode);
+    return;
+  }
   const view = el.querySelector('.md-view');
   const body = el.querySelector('.body');
   const toggle = el.querySelector('.md-toggle');
