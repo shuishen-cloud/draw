@@ -133,6 +133,12 @@
     position: absolute; z-index: 0;
     border-radius: 14px; border: 2px dashed;
     pointer-events: none;
+    transition: box-shadow .12s, background-color .12s;
+  }
+  /* 拖动节点时的候选归属区域：描边加亮，松手就会归到这里 */
+  .zone.drop-target {
+    box-shadow: 0 0 0 3px rgba(79,70,229,.35) inset, 0 0 18px rgba(79,70,229,.25);
+    border-style: solid;
   }
   .zone .zone-bar {
     position: absolute; left: 0; top: 0; right: 0;

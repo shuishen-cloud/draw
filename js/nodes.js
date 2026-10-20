@@ -7,7 +7,7 @@ import { runExecNode } from './run.js';
 import { worldEl } from './viewport.js';
 // 循环依赖：zones.js 也 import 本文件的 layoutNode/refreshAllZonePickers。
 // 两侧都只导出函数声明（无顶层副作用），ESM 提升后可安全互相调用。
-import { autoAssignZone } from './zones.js';
+import { autoAssignZone, zoneAtPoint } from './zones.js';
 // 2. 节点增删
 // =========================================================================
 export function createNode(kind, opts = {}) {
@@ -343,16 +343,31 @@ export function selectNode(id) {
 export function startDrag(e, node) {
   const startX = e.clientX, startY = e.clientY;
   const origX = node.x, origY = node.y;
+  let highlighted = null;          // 当前高亮的区域 id
+
+  // 高亮即将归属的区域（松手才会真正写入）
+  const highlight = (zone) => {
+    const next = zone ? zone.id : null;
+    if (next === highlighted) return;
+    if (highlighted) {
+      state.zones[highlighted]?.el?.classList.remove('drop-target');
+    }
+    if (next) state.zones[next]?.el?.classList.add('drop-target');
+    highlighted = next;
+  };
+
   function onMove(ev) {
     // 除以 scale：鼠标在屏幕上动 1px，节点在 world 中只应动 1/scale
     node.x = origX + (ev.clientX - startX) / view.scale;
     node.y = origY + (ev.clientY - startY) / view.scale;
     layoutNode(node);
     redrawEdges();
+    highlight(zoneAtPoint(node.x + node.w / 2, node.y + node.h / 2));
   }
   function onUp() {
     window.removeEventListener('pointermove', onMove);
     window.removeEventListener('pointerup', onUp);
+    highlight(null);
     // 拖动结束按位置自动判定区域归属（拖出则清空）
     autoAssignZone(node);
     window.scheduleSnapshot?.();   // 拖动结束保存位置

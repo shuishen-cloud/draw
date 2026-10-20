@@ -263,6 +263,53 @@ const SIM_DRAG = `
         `${dragged.zoneId} vs ${dragged.zId}`);
   void barBox;
 
+  console.log('\n[11b] 拖动过程中高亮目标区域');
+  const hl = await page.evaluate(() => {
+    clearCanvas();
+    const z = createZone({ title: '高亮区', x: 200, y: 200, w: 400, h: 300 });
+    const n = createNode('doc', { x: 900, y: 900, w: 160, h: 100, text: '# 拖动' });
+    view.scale = 1; view.x = 0; view.y = 0; applyView();
+    // 模拟拖动中途经过区域中心
+    const before = !!z.el.classList.contains('drop-target');
+    const bar = n.el.querySelector('.bar');
+    const br = bar.getBoundingClientRect();
+    bar.dispatchEvent(new PointerEvent('pointerdown', {
+      bubbles: true, cancelable: true, pointerId: 33, pointerType: 'mouse',
+      button: 0, buttons: 1, clientX: br.left + br.width / 2, clientY: br.top + br.height / 2,
+    }));
+    window.dispatchEvent(new PointerEvent('pointermove', {
+      bubbles: true, pointerId: 33, pointerType: 'mouse', buttons: 1,
+      clientX: 400, clientY: 350,
+    }));
+    return null;   // 保持拖动状态，下一步检查
+  });
+  void hl;
+  const during = await page.evaluate(() => {
+    const z = Object.values(state.zones)[0];
+    return { highlighted: z.el.classList.contains('drop-target') };
+  });
+  check('拖动进入区域时高亮该区域', during.highlighted === true,
+        JSON.stringify(during));
+
+  // 拖出区域，高亮应取消
+  const out = await page.evaluate(() => {
+    window.dispatchEvent(new PointerEvent('pointermove', {
+      bubbles: true, pointerId: 33, pointerType: 'mouse', buttons: 1,
+      clientX: 5, clientY: 5,
+    }));
+    const z = Object.values(state.zones)[0];
+    return { highlighted: z.el.classList.contains('drop-target') };
+  });
+  check('拖出区域后取消高亮', out.highlighted === false, JSON.stringify(out));
+
+  // 松手结束拖动状态
+  await page.evaluate(() => {
+    window.dispatchEvent(new PointerEvent('pointerup', {
+      bubbles: true, pointerId: 33, pointerType: 'mouse',
+    }));
+  });
+  await page.waitForTimeout(100);
+
   console.log('\n[12] 点标题栏控件不会误拖动节点');
   const noDrag = await page.evaluate(() => {
     const n = Object.values(state.nodes)[0];
