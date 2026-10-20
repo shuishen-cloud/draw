@@ -76,7 +76,62 @@
 
 ## 7. 实现与校验结果
 
-（close 阶段回填）
+### 7.1 改动（仅 `styles.css`）
+
+```css
+.node .body { flex: 1 1 auto; display: flex; align-items: stretch;
+              min-height: 0; min-width: 0; overflow: hidden; }
+.node .body > * { align-self: stretch; }
+
+.node textarea, .node .out {
+  flex: 1 1 0; min-height: 0; min-width: 0;
+  overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin;
+}
+
+.node .exec-prompt { flex: 0 0 auto; height: 64px; min-height: 64px;
+                     overflow-y: auto; overscroll-behavior: contain; }
+.node .exec-out    { flex: 1 1 0; min-height: 0; overflow-y: auto; }
+.node .exec-inlabel{ flex: 0 0 auto; }
+```
+
+另外给 `.out` / `.exec-out` 加了 `overflow-wrap: anywhere; word-break: break-word`，长 URL / 长英文单词不再把节点顶宽。
+
+### 7.2 校验结果（实测）
+
+```
+$ node build.js && node tests/e2e_node_scroll.cjs
+[1] 页面加载              ✔ 无 JS 异常
+[2] doc 节点              ✔ 节点高度 == 配置值 h        ✔ .body 高度 == 节点高 − 标题栏高
+                          ✔ .body overflow hidden      ✔ textarea 独立滚动
+                          ✔ overflow-y auto            ✔ overscroll-behavior: contain
+[3] 真的能滚              ✔ scrollTop 生效             ✔ 可滚动范围合理
+[4] output 节点           ✔ 节点高度 == 配置值          ✔ 结果区独立滚动
+                          ✔ overflow-y auto            ✔ 结果区高度占满 body
+[5] exec 节点             ✔ 节点高度 == 配置值          ✔ 提示词区固定高度
+                          ✔ 结果区可滚动                ✔ overflow-y auto
+[6] 图片节点              ✔ 节点高度 == 配置值          ✔ 内容不溢出
+[7] 回归                  ✔ 超长内容后节点高度不变
+[8] 无异常                ✔ 全程无 JS 异常
+结果：21 通过，0 失败
+```
+
+回归检查：
+
+```
+$ node --test tests/test_geom.mjs         → pass 12, fail 0
+$ node tests/e2e_touch_link.cjs           → 17 通过，0 失败
+```
+
+### 7.3 过程中踩的坑
+
+1. **测试自身的坐标错误**：`getBoundingClientRect()` 返回屏幕像素，而节点尺寸是 world 单位。`view.scale = 0.329` 时 200px 高的节点量出来是 65.8px —— 一度误判为布局 bug。所有尺寸断言必须除以 `view.scale`。
+2. **`height: 0` 压过 `align-self: stretch`**：`output` / `doc` 节点的 `.body` 是 `row` 方向，内容区写 `height: 0` 后高度直接归零。改用 `flex: 1 1 0` + `min-height: 0`。
+3. **`.body` 必须是约束边界**：`.node` 保持 `overflow: visible`（端口/手柄要伸出边框），真正裁剪交给 `.body`。
+
+### 7.4 遗留
+
+- `exec` 节点提示词区固定 64px；若需要可拖拽调整，需要新增手柄（不在本次范围）。
+- 滚动条样式用标准 `scrollbar-width: thin`（Firefox/新版 Chromium）；WebKit 旧版会显示默认滚动条，功能不受影响。
 
 ## 8. fix 阶段修正
 
