@@ -165,3 +165,10 @@ pkill -f "node server.js" && node server.js
 - **不影响生产部署**：容器内走 nginx（`Dockerfile` + `deploy-access-gate` 的配置），`server.js` 仅本地开发用。生产如需缓存策略，在 nginx 层配。
 - 未加 `ETag` / `Last-Modified`：有 `no-store` 后条件请求无意义。
 - `HEAD` 请求正常带 `no-store`（未单独处理，由同一 `writeHead` 分支覆盖）。
+
+## 7. 收尾
+
+- 状态：已完成并验证（212 项全量回归通过）。
+- 影响范围仅限本地开发服务器 `server.js`；前端代码、构建产物、部署配置均未改动。
+- 部署到手机/平板时用的是 `MutipleChat.html` 单文件（`node build.js` 生成），不经过本服务器，因此与本改动无关。
+- 后续若要给生产加缓存策略，应在 nginx 层按资源类型配置（`index.html` 不缓存、带 hash 的静态资源长缓存）。
