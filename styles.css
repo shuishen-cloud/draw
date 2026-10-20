@@ -14,7 +14,9 @@
   #canvas.panning { cursor: grabbing; }
 
   /* 布局：画布区 + 右侧侧边栏（flex） */
-  #stage { position: absolute; inset: 0; display: flex; }
+  /* overflow: hidden —— 折叠的侧栏用 transform 移出屏幕但仍占布局宽度，
+     不在 stage 裁剪的话溢出会传到 html，整页出现水平滚动条。 */
+  #stage { position: absolute; inset: 0; display: flex; overflow: hidden; }
   #canvasWrap { position: relative; flex: 1 1 auto; min-width: 0; overflow: hidden; }
   #canvasWrap.dropping::after {
     content: '松开以导入文件'; position: absolute; inset: 12px; z-index: 40;
@@ -425,8 +427,8 @@
   }
   .node:hover .port { opacity: 1; }
   .port:hover { background: var(--accent); transform: translateY(-50%) scale(1.25); }
-  .port.in  { left: -8px; }
-  .port.out { right: -8px; }
+  .port.port-in  { left: -8px; }
+  .port.port-out { right: -8px; }
 
   /* 边框热条带：节点四边各一条不可见条带，手指沿边走都能拖出连线 */
   .edge-hot { position: absolute; z-index: 3; }
