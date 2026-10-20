@@ -41,7 +41,18 @@ export async function runEdge(edgeId) {
   dst.textEl.classList.remove('empty');
   edge.running = true;
   redrawEdges();
-  const outText = await streamLLM({ key, promptText, doc, images, onDelta: (t) => setOutput(dst, t) });
+  // 流式输出期间节流重绘：目标节点内容增长会改变尺寸，线要及时跟上，
+  // 但不要每帧重绘（会拖慢渲染）。running 动画靠 class 维持，不受重绘影响。
+  let redrawQueued = false;
+  const scheduleRedraw = () => {
+    if (redrawQueued) return;
+    redrawQueued = true;
+    requestAnimationFrame(() => { redrawQueued = false; redrawEdges(); });
+  };
+  const outText = await streamLLM({
+    key, promptText, doc, images,
+    onDelta: (t) => { setOutput(dst, t); scheduleRedraw(); },
+  });
   edge.running = false;
   redrawEdges();
   DBG.log('========== runEdge', edgeId, '结束，输出', outText.length, '字符 ==========');
@@ -66,18 +77,21 @@ export function setOutput(node, text) {
 }
 
 export function flashEdge(edge, type) {
-  if (!edge.pathEl) return;
-  // 用 class 驱动闪烁，animationend 后自行清除；不再 setTimeout 全量重绘
+  // 先设状态再重绘：重绘会按 edge.flash 同步 class，保证绑到当前的 path 元素上
   edge.flash = type === 'skip' ? 'skip' : 'ok';
   redrawEdges();
+  if (!edge.pathEl) { edge.flash = null; return; }
   const p = edge.pathEl;
-  const done = () => {
-    p.removeEventListener('animationend', done);
+  let done = false;
+  const finish = () => {
+    if (done) return;
+    done = true;
+    p.removeEventListener('animationend', finish);
     edge.flash = null;
     redrawEdges();
   };
-  p.addEventListener('animationend', done);
-  setTimeout(done, 1200);   // 兜底：动画未触发也要恢复
+  p.addEventListener('animationend', finish);
+  setTimeout(finish, 1200);   // 兜底：动画未触发（如偏好减少动态效果）也恢复
 }
 
 // =========================================================================

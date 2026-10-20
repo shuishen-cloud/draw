@@ -66,7 +66,7 @@ export function nearestBorderPoint(r, px, py) {
 }
 
 // 三次贝塞尔路径：控制点沿锚点所在边的法线方向外推，避免线穿过节点内部。
-export function edgePath(pts) {
+export function bezierPath(pts) {
   const { x1, y1, x2, y2, from, to } = pts;
   const k = Math.max(24, Math.min(160, Math.hypot(x2 - x1, y2 - y1) * 0.45));
   const c1 = normalOffset(from, x1, y1, x2, y2, k);

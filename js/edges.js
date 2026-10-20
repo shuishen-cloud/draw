@@ -5,7 +5,7 @@ import { applyFilter } from './outline.js';
 import { toggleEdgeInTask } from './tasks.js';
 import { screenToWorld, worldEl } from './viewport.js';
 import {
-  anchorSide, edgeEndpoints, edgePath as geomEdgePath, hitTest, nearestBorderPoint,
+  anchorSide, edgeEndpoints, bezierPath, hitTest, nearestBorderPoint,
 } from './geom.js';
 // 6. 连线：任意节点、任意锚点拖出
 // =========================================================================
@@ -165,8 +165,9 @@ export function edgeGeometry(edge) {
   return g;
 }
 
+// 连线路径（对外接口名保持 edgePath，内部走 geom.bezierPath）
 export function edgePath(g) {
-  return geomEdgePath(g);
+  return bezierPath(g);
 }
 
 // 增量渲染：复用已有 DOM，只更新 d 与 class。
@@ -215,7 +216,7 @@ export function drawGhost(link) {
     svg.appendChild(ghost);
   }
   // 预览线：起点在源节点锚点，终点跟随手指
-  ghost.setAttribute('d', geomEdgePath({
+  ghost.setAttribute('d', bezierPath({
     x1: link.x1, y1: link.y1, x2: link.x2, y2: link.y2,
     from: 'auto', to: 'auto',
   }));

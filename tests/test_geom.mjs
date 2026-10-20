@@ -9,7 +9,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   rectAnchor, edgeEndpoints, distanceToRect, hitTest,
-  nearestBorderPoint, edgePath, anchorSide,
+  nearestBorderPoint, bezierPath, anchorSide,
 } from '../js/geom.js';
 
 const A = { x: 0, y: 0, w: 100, h: 60 };
@@ -72,15 +72,15 @@ test('nearestBorderPoint：抓在左上角 → 就近选左或上（不为 NaN�
   assert.ok(p.x === 0 || p.y === 0);
 });
 
-test('edgePath：产出合法三次贝塞尔，端点精确等于锚点', () => {
-  const d = edgePath({ x1: 100, y1: 30, x2: 300, y2: 30, from: 'right', to: 'left' });
+test('bezierPath：产出合法三次贝塞尔，端点精确等于锚点', () => {
+  const d = bezierPath({ x1: 100, y1: 30, x2: 300, y2: 30, from: 'right', to: 'left' });
   assert.match(d, /^M 100 30 C /);
   assert.match(d, / 300 30$/);
   assert.ok(!d.includes('NaN'));
 });
 
-test('edgePath：上下排列时控制点沿法线外推（y 方向）', () => {
-  const d = edgePath({ x1: 50, y1: 60, x2: 50, y2: 300, from: 'bottom', to: 'top' });
+test('bezierPath：上下排列时控制点沿法线外推（y 方向）', () => {
+  const d = bezierPath({ x1: 50, y1: 60, x2: 50, y2: 300, from: 'bottom', to: 'top' });
   const nums = d.match(/-?\d+(\.\d+)?/g).map(Number);
   assert.equal(nums.length, 8);   // M x y C c1x c1y c2x c2y x y
   assert.ok(!d.includes('NaN'));
