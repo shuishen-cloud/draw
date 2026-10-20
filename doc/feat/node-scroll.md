@@ -77,3 +77,7 @@
 ## 7. 实现与校验结果
 
 （close 阶段回填）
+
+## 8. fix 阶段修正
+
+初版给内容区加 `height: 0` 作为 flex 基线，导致 `.body` 为 row 方向时（`output` / `doc` 节点）子项高度直接变 0（`height:0` 优先级高于 `align-self: stretch`）。改为 `flex: 1 1 0` + `min-height: 0`，不写死 `height`，横纵两种容器都能正确收缩。
