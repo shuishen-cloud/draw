@@ -79,9 +79,11 @@ export function fitToContent(padding = 60) {
   }
   const r = visibleRect();
   // 窄屏时减小边距，并给底部工具栏留出高度，避免内容被遮或缩得过小
-  const narrow = r.width < 640;
+  // 窄屏/平板（与 CSS 断点 1024px 对齐）：缩小边距，并给底部工具栏留高度。
+  // 工具栏在 ≤1024px 时贴底横滑，约 50px 高。
+  const narrow = r.width < 1024;
   const pad = narrow ? 20 : padding;
-  const bottomInset = narrow ? 130 : 0;
+  const bottomInset = narrow ? 80 : 0;
   const usableW = Math.max(80, r.width - pad * 2);
   const usableH = Math.max(80, r.height - pad * 2 - bottomInset);
   const cw = maxX - minX, ch = maxY - minY;

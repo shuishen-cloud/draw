@@ -299,7 +299,45 @@ const STUB_FETCH = `
   check('结束后节点移除 .running', running.after.node === false,
         JSON.stringify(running.after));
 
-  console.log('\n[11] 无异常');
+  console.log('\n[11] 平板布局（回归：工具栏曾被压成竖条、侧栏挤压画布）');
+  const layout = await page.evaluate(() => {
+    const tb = document.getElementById('toolbar').getBoundingClientRect();
+    const canvas = document.getElementById('canvasWrap').getBoundingClientRect();
+    const outline = document.getElementById('outline');
+    return {
+      toolbarW: Math.round(tb.width),
+      toolbarH: Math.round(tb.height),
+      canvasW: Math.round(canvas.width),
+      outlineCollapsed: outline.classList.contains('collapsed'),
+      sidebarCollapsed: document.getElementById('sidebar').classList.contains('collapsed'),
+      overflowX: getComputedStyle(document.getElementById('toolbar')).overflowX,
+    };
+  });
+  check('工具栏宽度正常（未被压成竖条）', layout.toolbarW > 200, JSON.stringify(layout));
+  check('工具栏高度单行级（< 120px）', layout.toolbarH < 120, String(layout.toolbarH));
+  check('工具栏可横向滚动', layout.overflowX === 'auto', layout.overflowX);
+  check('画布占满宽度', layout.canvasW >= 800, String(layout.canvasW));
+  check('平板上侧栏默认折叠', layout.outlineCollapsed && layout.sidebarCollapsed,
+        JSON.stringify(layout));
+
+  console.log('\n[11b] 展开两侧栏后工具栏不被压成竖条');
+  const expanded = await page.evaluate(() => {
+    document.getElementById('outline').classList.remove('collapsed');
+    document.getElementById('sidebar').classList.remove('collapsed');
+    return null;
+  });
+  void expanded;
+  await page.waitForTimeout(400);
+  const expandedLayout = await page.evaluate(() => {
+    const tb = document.getElementById('toolbar').getBoundingClientRect();
+    return { w: Math.round(tb.width), h: Math.round(tb.height) };
+  });
+  check('展开侧栏后工具栏仍有可用宽度', expandedLayout.w >= 200,
+        JSON.stringify(expandedLayout));
+  check('展开侧栏后工具栏未被压成竖条', expandedLayout.h < 120,
+        String(expandedLayout.h));
+
+  console.log('\n[12] 无异常');
   check('全程无 JS 异常', errs.length === 0, errs.join(' | '));
 
   console.log(`\n结果：${pass} 通过，${fail} 失败`);
