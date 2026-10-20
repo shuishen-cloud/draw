@@ -72,4 +72,49 @@
 
 ## 6. 实现与校验结果
 
-（close 阶段回填）
+### 6.1 交付内容
+
+| 文件 | 改动 |
+|---|---|
+| `js/geom.js`（新增） | 纯函数：`rectAnchor` / `edgeEndpoints` / `distanceToRect` / `hitTest` / `nearestBorderPoint` / `bezierPath` / `anchorSide`。无 DOM 依赖，可在 node 下测 |
+| `js/edges.js` | `bindLinkHandle`（8px 阈值区分「点击」与「拖线」）、`startLinkFrom` 支持任意锚点、拖动中 `hitTest` 高亮候选、`pointercancel`/`blur` 兜底；`redrawEdges` 改为**增量复用 path DOM** |
+| `js/nodes.js` | 两个端口都成为拖线热区；新增四边 `.edge-hot` 条带（12px，触摸设备 18px） |
+| `js/exec.js` | `flashEdge` 改 class + `animationend`；流式输出期间 `requestAnimationFrame` 节流重绘 |
+| `js/io2.js` | `clearCanvas` 显式移除残留 path（增量渲染的必然配套） |
+| `styles.css` | `.port::after` 隐形扩圈、`.edge-hot`、`.node.link-target` 整圈高亮、`@keyframes wire-flow` / `wire-flash` |
+| `index.html` | 提示文案改为「按住任意边框往外拖」 |
+| `tests/test_geom.mjs` | 12 个纯函数单测 |
+| `tests/e2e_touch_link.cjs` | 17 项端到端断言（手机视口 + 触摸模拟 + 真实 Chrome） |
+
+### 6.2 校验结果（实测）
+
+```
+$ node --test tests/test_geom.mjs
+ℹ pass 12   ℹ fail 0
+
+$ node build.js && node tests/e2e_touch_link.cjs
+✔ 无 JS 异常                                  ✔ 示例画布有 2 个节点
+✔ 拖动中出现预览线 ghost                        ✔ 接近目标节点时其整圈高亮
+✔ 松手后建边成功（边框→边框）                    ✔ 松手后 ghost 已清理
+✔ 松手后高亮已清理                              ✔ 反向连也能建边
+✔ 空白处松手不建边                              ✔ 无残留 ghost
+✔ 落点在目标内部同样建边                        ✔ keyframes wire-flow 已定义
+✔ ghost 元素存在且带虚线动画                    ✔ running 线应用 wire-flow 动画
+✔ path 元素被复用（未被 innerHTML 重建）         ✔ 拖动后无异常
+结果：17 通过，0 失败
+```
+
+### 6.3 fix 阶段发现并修复的问题
+
+1. **`geomEdgePath is not defined`（致命）** —— `build.js` 展平模块后，`import { edgePath as geomEdgePath }` 的别名从未被定义，浏览器 `ReferenceError` 导致整个应用初始化失败。**这是端到端测试才发现的，纯单测/F5 本地 ES Module 模式都看不出来。** 修复：几何函数改名 `bezierPath`，`edges.js` 保留自己的 `edgePath` 封装，不使用 import 别名。
+2. **`clearCanvas` 残留旧线** —— `redrawEdges` 不再 `innerHTML = ''` 后，导入画布会看到上一张图的 path。修复：显式移除 `#edges path.wire` 与 `path.ghost`。
+3. **`flashEdge` 错绑元素** —— 先重绘再取 `pathEl`，可能绑到旧元素。修复：先设 `edge.flash` 再重绘，取重绘后的 `pathEl`。
+4. **流式输出时线不跟随** —— `onDelta` 每块都更新文本但只在首尾重绘。修复：`requestAnimationFrame` 节流重绘。
+
+### 6.4 遗留与注意
+
+- **`build.js` 的展平限制**：禁止 import 别名（`as`）、禁止 `export ... from` 再导出。后续改模块时需留意，否则只在打包产物里炸。
+- `.port` 在手机上仍保留可见圆点，但**不再是唯一入口**；纯视觉提示，`opacity: .55`，悬停/触摸时全亮。
+- 连线颜色语义未变：`🖐️` 开头为可执行（强调色），其余为普通灰。
+- 验证脚本依赖 playwright + chromium，路径可经 `PW_DIR` / `CHROME_BIN` 覆盖；未纳入 CI（项目暂无 CI）。
+
