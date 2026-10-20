@@ -130,4 +130,56 @@
 
 ## 7. 实现与校验结果
 
-（close 阶段回填）
+### 7.1 交付内容
+
+| 文件 | 改动 |
+|---|---|
+| `js/md.js` 🆕 | `renderMarkdown(src)` 纯函数。令牌化代码块 → 全文转义 → 块级/行内解析 → 还原令牌 |
+| `js/nodes.js` | 标题栏加「预览/编辑」按钮；新增 `.md-view` 层；`setNodeMode(node, mode)` 导出；预览态点击内容区切回编辑 |
+| `js/chat.js` | 新增 `setMsgText(el, text)`；**助手**气泡渲染 Markdown，**用户**消息保持纯文本 |
+| `js/exec.js` | `setOutput` 在预览态同步刷新 `.md-view`（流式跟随） |
+| `styles.css` | `.md-view` 排版（标题/列表/代码块/引用/链接）、`.md-toggle` 按钮、`.msg-md` 气泡排版 |
+| `build.js` | `ORDER` 中加入 `md.js`（`state.js` 之后） |
+| `tests/test_md.mjs` | 21 个单测（含 6 个 XSS 用例） |
+| `tests/e2e_md_render.cjs` | 45 项端到端断言 |
+
+### 7.2 安全模型（重点）
+
+```
+输入
+ ↓ 规范化（去 BOM、剥离 \u0000、截断 100k）
+ ↓ 1) 围栏代码块 → 令牌 + 内容单独转义
+ ↓ 2) 全文 HTML 转义（& < > " '）
+ ↓ 3) 块级解析（标题/列表/引用/分割线/段落）
+ ↓ 4) 行内解析（粗/斜/行内码/链接）
+ ↓ 5) 还原代码块令牌
+输出：只可能包含白名单标签
+```
+
+- 链接白名单：`http:` / `https:` / `mailto:` / 相对路径。`javascript:` / `data:` 等降级为纯文本。
+- 额外拒绝 URL 中的空白与引号，防止属性逃逸。
+
+### 7.3 校验结果（实测）
+
+```
+$ node --test tests/test_md.mjs            → pass 21, fail 0
+$ node --test tests/test_geom.mjs          → pass 12, fail 0
+$ node tests/e2e_md_render.cjs             → 45 通过，0 失败
+$ node tests/e2e_node_scroll.cjs           → 21 通过，0 失败
+$ node tests/e2e_touch_link.cjs            → 17 通过，0 失败
+```
+
+端到端覆盖：预览切换（模式/按钮文案/`.body` 真正隐藏）、6 种语法渲染、编辑态文本完整、点击切回、预览区滚动、XSS（`<script>` / `<img onerror>` / `javascript:`）、output/exec 节点预览、图片节点无按钮、气泡渲染（助手解析 / 用户不解析）、流式实时刷新。
+
+### 7.4 过程中踩的坑
+
+1. **`display: flex` 覆盖 `[hidden]`**：`.node .body[hidden]` 不生效，`.body` 仍占布局并与 `.md-view` 抢 flex 空间，导致预览区只有 111px 且内容溢出节点。必须显式写 `.node .body[hidden] { display: none }`。
+2. **引用语法在转义后失效**：块级解析发生在转义之后，`>` 已变成 `&gt;`，正则需同时匹配两种形式。
+3. **XSS 断言太粗**：`/\son\w+=/` 会误报转义后的文本（`&lt;img ... onerror=` 在文本节点里是安全的）。改为「解析标签 → 校验标签名白名单 + 标签内事件属性」。
+
+### 7.5 遗留与注意
+
+- 不是完整 CommonMark：不支持表格、任务列表、脚注、嵌套引用（`>>`）、HTML 内联。当前需求下够用，后续按需扩。
+- 预览态不持久化：刷新/导入后回到编辑态（设计如此，避免导出格式膨胀）。
+- `md.js` 用模块级 `CODE_BLOCKS` 数组存放令牌池，每次渲染重置。不可重入（同步执行，无并发风险）。
+- 用户气泡故意不解析 Markdown，避免用户的 Markdown 被模型误读为指令。
