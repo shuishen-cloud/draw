@@ -8,12 +8,21 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { renderMarkdown } from '../js/md.js';
 
-// 所有输出都不应包含可执行标签
+// 所有输出都不应包含可执行结构。
+// 注意：转义后的文本里出现 onerror= 字样是安全的（它在文本节点中），
+// 真正要防的是「作为标签/属性存在」，所以这里检查是否真的能被解析出危险元素/属性。
 function assertNoInjection(html) {
   assert.ok(!/<script/i.test(html), '不得出现 <script>: ' + html);
   assert.ok(!/<iframe/i.test(html), '不得出现 <iframe>: ' + html);
-  assert.ok(!/\son\w+\s*=/i.test(html), '不得出现内联事件处理器: ' + html);
   assert.ok(!/javascript:/i.test(html), '不得出现 javascript: 协议: ' + html);
+  // 只允许白名单标签，且标签内不得带 on* 事件属性
+  const tags = [...html.matchAll(/<([a-zA-Z][a-zA-Z0-9]*)\b([^>]*)>/g)];
+  const ALLOWED = new Set(['p','br','h1','h2','h3','h4','h5','h6','strong','em','code',
+    'pre','ul','ol','li','blockquote','hr','a']);
+  for (const [, name, attrs] of tags) {
+    assert.ok(ALLOWED.has(name.toLowerCase()), '出现非白名单标签 <' + name + '>: ' + html);
+    assert.ok(!/\son\w+\s*=/i.test(attrs), '标签带事件属性 <' + name + attrs + '>: ' + html);
+  }
 }
 
 test('空输入与非字符串', () => {
@@ -106,9 +115,12 @@ test('XSS：<script> 被转义', () => {
   assert.match(html, /&lt;script&gt;/);
 });
 
-test('XSS：img onerror 被转义', () => {
+test('XSS：img onerror 被转义成纯文本', () => {
   const html = renderMarkdown('<img src=x onerror=alert(1)>');
   assertNoInjection(html);
+  // 整个标签应被转义，不产生真实 <img> 元素
+  assert.ok(!/<img/i.test(html), '不应出现 <img>: ' + html);
+  assert.match(html, /&lt;img/);
 });
 
 test('XSS：javascript: 链接降级为非链接', () => {
