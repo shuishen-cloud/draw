@@ -97,4 +97,66 @@ zoomAt(r.left + r.width / 2, r.top + r.height / 2, 1 / view.scale);
 
 ## 6. 实现与校验结果
 
-（close 阶段回填）
+### 6.1 改动
+
+| 文件 | 关键改动 |
+|---|---|
+| `js/nodes.js` | `renderNode` 末尾（`node.el` 赋值**之后**）对 doc/output/exec 调 `setNodeMode(node,'preview')`；图片节点的选图 `click` 从 `el` 改为 `body`；`.zone-pick` 加 `click` 的 `stopPropagation`；`setNodeMode` 的静默 `return` 改为 `DBG.warn` |
+| `js/main.js` | 示例文档换成带标题/列表/引用的 Markdown；`zoomIn/zoomOut/reset1` 锚点改用 `viewCenter()`（`#canvasWrap`） |
+| `js/viewport.js` | 新增 `visibleRect()` 与 `centerContent()`；`fitToContent` 改用可见区、窄屏 padding 20、预留底部 130px、缩放上限 1.0 |
+| `styles.css` | `#hint { pointer-events: none }`；`#viewctl` z-index 提到 22 且窄屏移到顶部；`#toolbar` 让出右侧空间 |
+| `tests/e2e_node_scroll.cjs` | 显式切回 edit 态（该套件考察编辑态滚动） |
+| `tests/e2e_md_render.cjs` | 同上，段 [3] 显式从 edit 开始 |
+| `tests/e2e_ux_fixes.cjs` 🆕 | 21 项断言 |
+
+### 6.2 校验结果（实测）
+
+```
+$ node tests/e2e_ux_fixes.cjs
+[1] 页面加载          ✔ 无 JS 异常
+[2] 默认预览          ✔ mode=preview  ✔ .md-view 可见  ✔ .body 隐藏  ✔ 按钮=「编辑」
+[3] 示例 Markdown    ✔ 含语法  ✔ 渲染出标题  ✔ 渲染出列表
+[4] 图片点分类        ✔ 不触发选图（count=0）
+[5] 图片点内容区      ✔ 触发选图（count=1）
+[6] #hint            ✔ pointer-events: none
+[7] 工具栏            ✔ 按钮均未被遮挡
+[8] 1:1 缩放          ✔ scale=1  ✔ 节点仍在可见区
+[9] 模式往返          ✔ edit  ✔ preview
+[10] 无异常           ✔ 全程无 JS 异常
+结果：21 通过，0 失败
+```
+
+全量回归（153 项）：
+
+```
+tests/test_geom.mjs         → 12 passed
+tests/test_md.mjs           → 21 passed
+tests/e2e_node_scroll.cjs   → 21 通过
+tests/e2e_md_render.cjs     → 45 通过
+tests/e2e_touch_link.cjs    → 17 通过
+tests/e2e_port_clash.cjs    → 16 通过
+tests/e2e_ux_fixes.cjs      → 21 通过
+```
+
+额外复核（`review.cjs` 临时脚本）：
+
+```
+新建节点默认态: doc=preview, output=preview, img=edit, exec=preview
+拖动标题栏后:   preview → preview（不误切）
+编辑→预览往返:  h2=1, strong=1，源码完好
+导出数据:      version=1，不含 "mode" 字段（向后兼容）
+图片节点点分类: 选图触发 0 次
+```
+
+### 6.3 过程中踩的坑
+
+1. **`setNodeMode` 静默 return 掩盖 bug**：它首行是 `if (!node.el) return`，而我把「默认预览」放在了 `node.el = el` 赋值**之前**。结果：功能完全不生效、无任何报错。已改为 `DBG.warn`，并把调用移到赋值之后。
+2. **工具栏与视图控件重叠**：`#toolbar` 与 `#viewctl` 同在 `bottom:16px` 且同 z-index，窄屏下 toolbar 换行变高就盖住右侧缩放按钮。`elementFromPoint` 实测命中的是容器而非按钮。
+3. **`fitToContent` 用错坐标系**：`canvasEl()` 是 `inset:0` 全屏层，侧栏占位后中心不等于可见区中心；`padding=60` 在 390px 窄屏上占比过大，算出 36% 缩放。
+4. **改默认值会打破既有测试**：`e2e_node_scroll` 与 `e2e_md_render` 假设初始为编辑态。这是**有意的行为变更**，所以修测试（显式 `setNodeMode(n,'edit')`）而不是回退功能。
+
+### 6.4 遗留
+
+- 预览态不持久化：刷新后重新按默认规则推导（有内容即预览），符合直觉。
+- `server.js` 仍无 `Cache-Control`，开发时改代码需强刷（独立问题，未在本 feat 范围）。
+- 窄屏下底部工具栏仍占 130px，节点多时可视区会偏小。
