@@ -97,3 +97,18 @@ export function anchorSide(r, px, py) {
   if (Math.abs(py - (r.y + r.h)) < eps) return 'bottom';
   return 'auto';
 }
+
+// =========================================================================
+// 区域归属：点是否落在区域矩形内（纯函数，供单测与 zones.js 复用）
+// =========================================================================
+// 返回面积最小的命中区域：区域嵌套时取最内层，符合「更贴合」的直觉。
+// 面积相同则保留先出现的（遍历顺序稳定）。
+export function zoneAtPointIn(wx, wy, zones) {
+  let best = null, bestArea = Infinity;
+  for (const z of zones || []) {
+    if (wx < z.x || wx > z.x + z.w || wy < z.y || wy > z.y + z.h) continue;
+    const area = z.w * z.h;
+    if (area < bestArea) { bestArea = area; best = z; }
+  }
+  return best;
+}

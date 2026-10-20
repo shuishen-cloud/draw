@@ -5,6 +5,9 @@ import { readAsDataURL } from './io1.js';
 import { applyFilter, refreshOutline } from './outline.js';
 import { runExecNode } from './run.js';
 import { worldEl } from './viewport.js';
+// 循环依赖：zones.js 也 import 本文件的 layoutNode/refreshAllZonePickers。
+// 两侧都只导出函数声明（无顶层副作用），ESM 提升后可安全互相调用。
+import { autoAssignZone } from './zones.js';
 // 2. 节点增删
 // =========================================================================
 export function createNode(kind, opts = {}) {
@@ -175,8 +178,9 @@ export function renderNode(node) {
   // 移动 + 选中
   const bar = el.querySelector('.bar');
   bar.addEventListener('pointerdown', (e) => {
-    if (e.target.classList.contains('close')) return;
-    if (e.target.classList.contains('zone-pick')) return;
+    // 标题栏里的控件各自处理交互，不能连带拖动节点。
+    // 用 closest 而不是 classList，确保点到控件内部子元素也不误触。
+    if (e.target.closest('.close, .zone-pick, .md-toggle')) return;
     selectNode(node.id);
     startDrag(e, node);
   });
@@ -349,6 +353,8 @@ export function startDrag(e, node) {
   function onUp() {
     window.removeEventListener('pointermove', onMove);
     window.removeEventListener('pointerup', onUp);
+    // 拖动结束按位置自动判定区域归属（拖出则清空）
+    autoAssignZone(node);
     window.scheduleSnapshot?.();   // 拖动结束保存位置
   }
   window.addEventListener('pointermove', onMove);

@@ -3,6 +3,7 @@ import { redrawEdges } from './edges.js';
 import { layoutNode, refreshAllZonePickers } from './nodes.js';
 import { applyFilter, refreshOutline } from './outline.js';
 import { worldEl } from './viewport.js';
+import { zoneAtPointIn } from './geom.js';
 // 1.8 区域（Zone）—— 大纲的层级单位
 // =========================================================================
 export function createZone(opts = {}) {
@@ -135,4 +136,34 @@ export function layoutZone(zone) {
 
 export function nodesInZone(zoneId) {
   return Object.values(state.nodes).filter(n => n.zoneId === zoneId);
+}
+
+// =========================================================================
+// 区域归属：几何判定与自动归属
+// =========================================================================
+// 世界坐标 → 所在区域（无则 null）。几何判定复用 geom.js 的纯函数。
+export function zoneAtPoint(wx, wy) {
+  return zoneAtPointIn(wx, wy, Object.values(state.zones));
+}
+
+// 节点拖动结束后调用：按「节点中心点」判定归属，变化时同步下拉与大纲。
+// 返回新的 zoneId（null 表示未归属）。
+export function autoAssignZone(node) {
+  if (!node) return null;
+  const cx = node.x + node.w / 2;
+  const cy = node.y + node.h / 2;
+  const hit = zoneAtPoint(cx, cy);
+  const next = hit ? hit.id : null;
+  if (next === (node.zoneId ?? null)) return next;   // 无变化，跳过副作用
+  const prev = node.zoneId ?? null;
+  node.zoneId = next;
+  DBG.log('自动归属', node.id, prev, '->', next,
+          hit ? '(' + hit.title + ')' : '(未归属)');
+  if (node.el) {
+    const pick = node.el.querySelector('.zone-pick');
+    if (pick) pick.value = next || '';
+  }
+  refreshOutline();
+  window.scheduleSnapshot?.();
+  return next;
 }

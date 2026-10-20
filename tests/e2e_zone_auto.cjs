@@ -216,7 +216,88 @@ const SIM_DRAG = `
   check('导出含 zoneId 且 version 未变', exp.withZone >= 1 && exp.version === 1,
         JSON.stringify(exp));
 
-  console.log('\n[11] 无异常');
+  console.log('\n[11] 真实鼠标拖动（回归：标题栏控件曾吃掉拖动起手点）');
+  await page.evaluate(() => {
+    clearCanvas();
+    createZone({ title: '拖动区', x: 200, y: 200, w: 400, h: 300 });
+    createNode('doc', { x: 50, y: 50, w: 180, h: 120, text: '# 拖动测试' });
+    view.scale = 1; view.x = 0; view.y = 0; applyView();
+  });
+  await page.waitForTimeout(150);
+  const barBox = await page.locator('.node .bar').first().boundingBox();
+  const zoneBox = await page.locator('.zone .zone-bar').first().boundingBox();
+  // 抓标题文字（拖动抓手），而不是 bar 的几何中心（可能落在控件上）
+  const titleBox = await page.locator('.node .title').first().boundingBox();
+  check('标题栏存在可拖动抓手', !!titleBox && titleBox.width > 10,
+        JSON.stringify(titleBox));
+  // 回归：控件曾把标题栏中心占满，导致点中心根本不触发拖动
+  const centerHit = await page.evaluate(() => {
+    const b = document.querySelector('.node .bar').getBoundingClientRect();
+    const e = document.elementFromPoint(b.left + b.width / 2, b.top + b.height / 2);
+    return {
+      cls: e?.className || e?.tagName,
+      onControl: !!e?.closest('.zone-pick, .md-toggle, .close'),
+    };
+  });
+  check('标题栏中心不落在交互控件上', centerHit.onControl === false,
+        JSON.stringify(centerHit));
+  await page.mouse.move(titleBox.x + titleBox.width / 2, titleBox.y + titleBox.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(zoneBox.x + zoneBox.width / 2, zoneBox.y + zoneBox.height + 150,
+                        { steps: 12 });
+  await page.mouse.up();
+  await page.waitForTimeout(250);
+  const dragged = await page.evaluate(() => {
+    const n = Object.values(state.nodes)[0];
+    const z = Object.values(state.zones)[0];
+    return {
+      zoneId: n.zoneId, zId: z.id,
+      moved: n.x !== 50 || n.y !== 50,
+      centerInZone: (n.x + n.w / 2) >= z.x && (n.x + n.w / 2) <= z.x + z.w
+                 && (n.y + n.h / 2) >= z.y && (n.y + n.h / 2) <= z.y + z.h,
+    };
+  });
+  check('真实拖动使节点移动', dragged.moved, JSON.stringify(dragged));
+  check('节点中心落入区域', dragged.centerInZone, JSON.stringify(dragged));
+  check('真实拖动后自动归属', dragged.zoneId === dragged.zId,
+        `${dragged.zoneId} vs ${dragged.zId}`);
+  void barBox;
+
+  console.log('\n[12] 点标题栏控件不会误拖动节点');
+  const noDrag = await page.evaluate(() => {
+    const n = Object.values(state.nodes)[0];
+    const before = { x: n.x, y: n.y };
+    for (const sel of ['.zone-pick', '.close']) {
+      const elx = n.el.querySelector(sel);
+      if (!elx) continue;
+      elx.dispatchEvent(new PointerEvent('pointerdown', {
+        bubbles: true, pointerId: 9, pointerType: 'mouse', button: 0, buttons: 1,
+        clientX: 5, clientY: 5,
+      }));
+      window.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, pointerId: 9 }));
+    }
+    return { before, after: { x: n.x, y: n.y } };
+  });
+  check('点下拉/关闭不移动节点',
+        noDrag.before.x === noDrag.after.x && noDrag.before.y === noDrag.after.y,
+        JSON.stringify(noDrag));
+
+  console.log('\n[12b] 点预览按钮不移动节点也不切换以外的副作用');
+  const mdClick = await page.evaluate(() => {
+    const n = Object.values(state.nodes)[0];
+    const before = { x: n.x, y: n.y, mode: n.el.dataset.mode };
+    n.el.querySelector('.md-toggle').dispatchEvent(new PointerEvent('pointerdown', {
+      bubbles: true, pointerId: 10, pointerType: 'mouse', button: 0, buttons: 1,
+      clientX: 5, clientY: 5,
+    }));
+    window.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, pointerId: 10 }));
+    return { before, after: { x: n.x, y: n.y, mode: n.el.dataset.mode } };
+  });
+  check('点预览按钮不移动节点',
+        mdClick.before.x === mdClick.after.x && mdClick.before.y === mdClick.after.y,
+        JSON.stringify(mdClick));
+
+  console.log('\n[13] 无异常');
   check('全程无 JS 异常', errs.length === 0, errs.join(' | '));
 
   console.log(`\n结果：${pass} 通过，${fail} 失败`);

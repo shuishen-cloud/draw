@@ -187,6 +187,9 @@
   }
   /* 区域选择器（节点标题栏内）*/
   .node .zone-pick {
+    /* flex: none —— 否则它会抢走 .title 的弹性空间，
+       导致标题栏中央被下拉占据，拖拽起手点不到拖动区 */
+    flex: none;
     font-size: 11px; border: 1px solid #ddd; border-radius: 5px;
     padding: 1px 4px; max-width: 78px; background: #fff; color: #555; cursor: pointer;
   }
@@ -280,11 +283,15 @@
     background: #f0f1f3; border-radius: 8px 8px 0 0;
     cursor: grab; user-select: none;
   }
+  /* 标题文字是拖动抓手：它总是占满剩余空间，比依赖空白区可靠 */
+  .node .bar > * { flex: none; }
+  .node .bar > .title { flex: 1 1 auto; }
   .node .bar:active { cursor: grabbing; }
   .node .dot { width: 9px; height: 9px; border-radius: 50%; background: #c3c6cb; flex: none; }
   .node[data-kind="doc"]    .dot { background: #16a34a; }
   .node[data-kind="output"] .dot { background: #eab308; }
-  .node .title { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .node .title { flex: 1 1 auto; min-width: 24px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: grab; }
+  .node .title:active { cursor: grabbing; }
   .node .close {
     flex: none; width: 18px; height: 18px; line-height: 16px; text-align: center;
     border-radius: 4px; color: #999; cursor: pointer; font-weight: 700;
