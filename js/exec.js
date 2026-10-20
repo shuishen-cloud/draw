@@ -1,5 +1,6 @@
 import { API_URL, DBG, PREFIX, state } from './state.js';
 import { redrawEdges } from './edges.js';
+import { renderMarkdown } from './md.js';
 // 9. 执行核心
 // =========================================================================
 export async function runEdge(edgeId) {
@@ -74,6 +75,13 @@ export function setOutput(node, text) {
     }
   }
   // 图片节点：不支持写入文本，忽略
+
+  // 若该节点正处于 Markdown 预览态，实时跟着刷新（否则流式输出时预览是冻结的）
+  if (node.el?.dataset.mode === 'preview') {
+    const src = [node.text || '', node.prompt || ''].filter(Boolean).join('\n\n');
+    const v = node.el.querySelector('.md-view');
+    if (v) v.innerHTML = renderMarkdown(src) || '<p class="md-empty">（无内容）</p>';
+  }
 }
 
 export function flashEdge(edge, type) {

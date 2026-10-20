@@ -266,7 +266,27 @@ const MD = [
         'strong=' + bubble.userStrong);
   check('用户气泡原文可见', bubble.userText.includes('**用户**'), bubble.userText);
 
-  console.log('\n[10] 全程无异常');
+  console.log('\n[10] 预览态下流式写入会实时刷新');
+  const live = await page.evaluate(() => {
+    clearCanvas();
+    const o = createNode('output', { x: 20, y: 20, w: 300, h: 200 });
+    setNodeMode(o, 'preview');
+    const before = o.el.querySelector('.md-view').innerHTML;
+    setOutput(o, '## 流式标题\n\n第一块内容');
+    const mid = o.el.querySelector('.md-view').innerHTML;
+    setOutput(o, '## 流式标题\n\n第一块内容\n\n第二块 **加粗**');
+    const after = o.el.querySelector('.md-view').innerHTML;
+    return {
+      before, mid, after,
+      midH2: /<h2>流式标题<\/h2>/.test(mid),
+      afterStrong: /<strong>加粗<\/strong>/.test(after),
+    };
+  });
+  check('预览态初始为空占位', /md-empty/.test(live.before), live.before);
+  check('流式第一块即渲染 h2', live.midH2, live.mid);
+  check('流式后续块继续渲染', live.afterStrong, live.after);
+
+  console.log('\n[11] 全程无异常');
   check('无 JS 异常', errs.length === 0, errs.join(' | '));
 
   console.log(`\n结果：${pass} 通过，${fail} 失败`);
