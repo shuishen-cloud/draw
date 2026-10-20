@@ -6,7 +6,7 @@
 // =========================================================================
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { zoneAtPointIn } from '../js/zones.js';
+import { zoneAtPointIn } from '../js/geom.js';
 
 // 用纯函数版本测试，避免依赖 state（内部会绑定到 state.zones）
 const z = (id, x, y, w, h) => ({ id, x, y, w, h });
