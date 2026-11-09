@@ -137,3 +137,73 @@ dy = pos.y - (bounds.y + bounds.h / 2)
 - `favorites.js` 增两条路径；面板预览按 `kind` 分支。
 - `build.js` 的 `ORDER` 需加入 `subgraph.js`（漏加会被现有校验拦下）。
 - 现有节点收藏行为不变（`favorite-node` 的 41 项断言须保持全绿）。
+
+---
+
+## 10. 实现与校验结果
+
+### 10.1 落地清单
+
+| 文件 | 改动 |
+|---|---|
+| `js/subgraph.js`（新增） | `pickSubgraph()`（框选 + 闭包裁剪）、`boundsOf()`、`centerOffset()`；纯逻辑，不碰 DOM |
+| `js/favorites.js` | `favoriteSubgraph()` / `loadSubgraphSnapshot()` / `restoreSubgraph()`；子图预览分支；`importFavorite()` 自动区分单节点/子图；列表项显示「子图 · N 节点 / M 连线」 |
+| `js/main.js` | `bindSubgraphSelect()`：进入框选模式、拖出选框、松手收藏、`Esc` 退出 |
+| `index.html` | 工具栏 `#favSubgraph`、`#selectHint` 提示条、`#selectBox` 选框 |
+| `styles.css` | 十字光标、选框虚线遮罩、提示条、子图预览样式 |
+| `build.js` | `ORDER` 加入 `subgraph.js`（漏加会被既有校验直接拦下） |
+
+### 10.2 fix 阶段修掉的问题
+
+1. **导入后连线全丢**（高）：见下节「关键教训」。
+2. **e2e 假失败**：以画布左上角为拖拽起点时，实际命中 `#toggleOutline`
+   浮动按钮，`pointerdown` 没到 canvas。用 `elementFromPoint` 定位、改从内容中心起手。
+
+### 10.3 关键教训：新 id 必须来自 createNode 的实际分配
+
+最初想用 `remap(snapshot, idFactory)` 预先分配 id 再按映射表连线，结果：
+
+```
+工厂预分配 n3/n4  →  createNode 内部 ++seq 又加一次  →  实际创建 n5/n6
+addEdge('n3','n4') →  state.nodes['n3'] 不存在  →  边被静默跳过
+```
+
+表现为「收藏时明明有线，导入后一条都不剩」。正确做法是
+**先 `createNode` 拿真实返回 id，边用真实 id 重连**。
+`remap()` 因此没有调用方，已删除——生产代码不留死路径。
+
+闭包裁剪则相反，必须留在**收藏侧**：`importCanvasData()` 对端点缺失的边是
+`continue` 静默跳过，若把跨框边存进去，用户只会看到连线无声消失。
+
+### 10.4 测试结果
+
+```
+node --test tests/*.mjs            45 通过，0 失败
+tests/e2e_favorite_subgraph.cjs    45 通过，0 失败   ← 本次新增
+回归：ux_fixes 21 · zone_auto 32 · node_scroll 21 · md_render 46
+      touch_link 17 · tablet_run 37 · dev_mode 10 · dev_cache 15
+      canvases_logic 37 · multi_canvas 28 · add_doc_empty 13
+      favorites_node 41
+```
+
+全量 **402 项断言，0 失败**。
+
+### 10.5 使用方式
+
+1. 点工具栏「⬚ 框选收藏」→ 鼠标变十字、画布顶部出现提示条。
+2. 拖出一个矩形框住想要的节点，松手即收藏。
+   **只保留两端都在框内的连线**，跨框的线会被裁掉。
+3. 侧栏「⭐ 收藏」→ 点该条 → 看到节点列表与 `A → B（命令）` 的连线结构。
+4. 点「⬇ 导入到画布」→ 在当前视口中心还原，**全部重新分配 id**，
+   内部连线按新 id 正确重连，边命令保留。
+5. `Esc` 或再点一次按钮退出框选模式。
+
+### 10.6 已知限制
+
+- 框选按「与选区相交」判定，无法只选「完全包含在框内」的节点（无 modifier 切换）。
+- 不做区域（zone）的迁移：子图里节点的 `zoneId` 保留原值，导入到没有该区域的画布时
+  会显示为「未分类」，不会自动建区域。
+- 框选模式与画布平移互斥（有意为之，避免手势冲突）。
+- 画布左上角区域被「📑 大纲」浮动按钮占用，从那里起手框选会点到按钮。
+- 子图预览是文本结构，不是缩小版画布缩略图（多节点时后者不可读）。
+- **AI 输出的收藏**沿用节点收藏（方案 C），不单独提供「只收藏输出文本」的入口。
