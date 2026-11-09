@@ -1,6 +1,6 @@
 import { DBG, PREFIX, flashToast, state } from './state.js';
 import { redrawEdges } from './edges.js';
-import { runEdge, streamLLM } from './exec.js';
+import { runEdge, setOutput, streamLLM } from './exec.js';
 import { removeEdge } from './nodes.js';
 import { depthOf, topoSortEdges } from './tasks.js';
 // 11. 全局运行 / 快捷键
@@ -76,6 +76,14 @@ export async function runExecNode(nodeId) {
     return;
   }
 
+  // 流式输出期间节流重绘：结果增长会改变节点尺寸，连线要及时跟上
+  let redrawQueued = false;
+  const scheduleRedraw = () => {
+    if (redrawQueued) return;
+    redrawQueued = true;
+    requestAnimationFrame(() => { redrawQueued = false; redrawEdges(); });
+  };
+
   const parts = [];
   const images = [];
   incoming.forEach((e, i) => {
@@ -96,15 +104,29 @@ export async function runExecNode(nodeId) {
     || localStorage.getItem('deepseek_key') || '';
   if (!key) { alert('请先填写 DeepSeek API Key'); return; }
 
-  // 清空结果并显示进行中
-  node.text = '';
-  node.textEl.textContent = '思考中…';
-  node.textEl.classList.remove('empty');
+  // 清空结果并显示进行中。
+  // 必须走 setOutput：执行节点默认处于预览态（非 img 节点都默认 preview），
+  // 此时 .body 是隐藏的，用户看到的是 .md-view。直接写 textEl 会让流式结果
+  // 落到不可见的 DOM 上，界面看起来像「点了没执行」。setOutput 会同步刷新预览。
+  setOutput(node, '思考中…');
+  node.el?.classList.add('running');      // 目标节点脉冲，让用户看到在跑
+  redrawEdges();
 
-  const out = await streamLLM({
-    key, promptText, doc: merged, images,
-    onDelta: (t) => { node.text = t; node.textEl.textContent = t; },
-  });
+  let out = '';
+  try {
+    out = await streamLLM({
+      key, promptText, doc: merged, images,
+      onDelta: (t) => { setOutput(node, t); scheduleRedraw(); },
+    });
+  } catch (err) {
+    // streamLLM 内部已捕获网络异常并回写错误文本；这里兜底防止「思考中…」卡死
+    DBG.err('执行节点异常', nodeId, err);
+    setOutput(node, '❌ ' + (err?.message || err));
+    out = node.text;
+  } finally {
+    node.el?.classList.remove('running');
+    redrawEdges();
+  }
   node.text = out;
   DBG.log('========== runExecNode', nodeId, '完成，输出', out.length, '字 ==========');
 }

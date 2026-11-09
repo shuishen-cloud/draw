@@ -3,7 +3,7 @@ import { bindLinkHandle, layoutEdgeLabel, redrawEdges } from './edges.js';
 import { renderMarkdown } from './md.js';
 import { readAsDataURL } from './io1.js';
 import { applyFilter, refreshOutline } from './outline.js';
-import { runExecNode } from './run.js';
+import { runNodeById } from './run.js';
 import { worldEl } from './viewport.js';
 // 循环依赖：zones.js 也 import 本文件的 layoutNode/refreshAllZonePickers。
 // 两侧都只导出函数声明（无顶层副作用），ESM 提升后可安全互相调用。
@@ -321,8 +321,11 @@ export function setNodeMode(node, mode) {
   const preview = mode === 'preview';
 
   if (preview) {
-    // 取当前文本：doc/output/exec 的正文与提示词都算内容
-    const src = [node.text || '', node.prompt || ''].filter(Boolean).join('\n\n');
+    // 取当前文本：执行节点只展示结果（提示词在编辑态可见），
+    // 否则预览首屏被提示词占满，看起来像“没生成结果”。
+    const src = node.kind === 'exec'
+      ? (node.text || '')
+      : [node.text || '', node.prompt || ''].filter(Boolean).join('\n\n');
     const html = renderMarkdown(src);
     view.innerHTML = html || '<p class="md-empty">（无内容）</p>';
     view.hidden = false;
