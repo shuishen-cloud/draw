@@ -109,3 +109,49 @@ restoreCanvas()      // 改为：ensure 仓库 → 载入当前画布（含旧�
 - `mc_tasks`（任务）仍是全局的，不随画布切换——本次不处理，记入已知限制。
 - `build.js` 的 `ORDER` 需加入 `canvases.js`（依赖 `state.js`、`io2.js`），
   否则单文件离线版会缺函数。
+
+---
+
+## 7. 实现与校验结果
+
+### 7.1 落地清单
+
+| 文件 | 改动 |
+|---|---|
+| `js/canvases.js`（新增） | 仓库：`ensureRepo / listCanvases / activeCanvasId / createCanvas / switchCanvas / renameCanvas / duplicateCanvas / removeCanvas / saveCurrent`；存储可注入 `__setStorage` |
+| `js/io2.js` | `autosaveCanvas` 改为写 `mc_canvas:<当前id>`；新增 `flushCanvas()`；`restoreCanvas()` 改为「ensureRepo + 载入当前画布」，并按内容是否为空返回 |
+| `js/state.js` | 导出 `HOST`、`documentRef()`，让模块顶层可安全 import（Node 下跑逻辑测试） |
+| `js/edges.js` `js/nodes.js` `js/zones.js` `js/run.js` `js/io1.js` | `window.xxx` → `HOST.xxx`；`run.js` 顶层 `document.addEventListener` → `documentRef()?.addEventListener` |
+| `js/main.js` | 装配 `#canvasPicker` / `#canvasPanel`；`afterCanvasSwitch()` 刷新大纲/连线/小地图/快照并清空对话 |
+| `js/chat.js` | 抽出 `clearChat()` |
+| `index.html` | 工具栏新增 `#canvasPicker`、`#canvasMenu`、`#canvasPanel` |
+| `styles.css` | 选择器/浮层样式；窄屏 `sticky + order:-1` 固定切换器 |
+| `build.js` | `ORDER` 加 `canvases.js`；新增「js/ 下有模块漏进 ORDER 就报错」的构建期校验 |
+
+### 7.2 修复的问题（fix 阶段）
+
+1. **首屏空白**：`ensureRepo` 预先写入空画布，使 `restoreCanvas()` 恒为 true，示例分支永不执行。
+   → 改为按 `nodes/zones` 是否为空返回。
+2. **窄屏切换器不可见**：390px 下 `#canvasPicker` 的 x=833（在可视区外）。
+   → `position: sticky; left: 0; order: -1`。
+3. **对话串画布**：切换后 `chat.messages` 未清空。
+4. **删最后一张的语义**：会静默补空白画布，改为明确二次确认。
+
+### 7.3 测试结果（全绿）
+
+```
+node --test tests/*.mjs                45 通过，0 失败
+tests/e2e_canvases_logic.cjs           37 通过，0 失败   ← 仓库逻辑（页面内 + 内存 storage）
+tests/e2e_multi_canvas.cjs             28 通过，0 失败   ← 界面切换 / 面板 / 窄屏 / 对话清空
+回归：ux_fixes 21 · zone_auto 32 · node_scroll 21 · md_render 46
+      touch_link 17 · tablet_run 37 · dev_mode 10 · dev_cache 15
+```
+
+本轮新增 65 项断言，全量 309 项。
+
+### 7.4 已知限制
+
+- 两个标签页打开**同一张画布**时仍会互相覆盖（与改造前一致，未倒退）。
+- `mc_tasks`（任务）仍为全局，不随画布切换。
+- 旧键 `mc_canvas` 迁移后保留不删；确认无回滚需求后可手动清理。
+- 单文件离线版需重新 `node build.js` 才会包含本功能。
