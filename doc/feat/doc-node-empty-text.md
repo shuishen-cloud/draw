@@ -59,6 +59,14 @@ document.getElementById('addDoc').addEventListener('click', () =>
 
 ## 6. 实现与校验结果
 
+### 6.0 复核（fix 阶段）
+
+- 全量回归确认改动只影响「＋ 文档节点」：`e2e_ux_fixes` 依赖首屏示例（显式传 text），
+  仍 21 项全绿；`e2e_multi_canvas` / `e2e_canvases_logic` 的多画布切换不受影响。
+- 已确认没有第二处把该提示语写进 `text` 的调用：全仓搜索
+  `grep -rn "在这里输入" js/ index.html` 只剩 `nodes.js` 的 placeholder 一处。
+- 旧数据不自动清洗的取舍见 6.3。
+
 ### 6.1 改动
 
 - `js/main.js`：addDoc 去掉 `text` 参数（1 行）。
