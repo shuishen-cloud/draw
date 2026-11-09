@@ -85,3 +85,15 @@ tests/e2e_add_doc_empty.cjs   通过，0 失败
   静默改写风险更大。需要时手动删除即可。
 - placeholder 文案仍为「在这里输入文档内容…」，与工具栏提示略有差异，
   本次不统一（避免影响已有 e2e 对文案的断言）。
+
+### 6.4 最终校验记录
+
+```
+node --test tests/*.mjs            45 通过，0 失败
+tests/e2e_add_doc_empty.cjs        13 通过，0 失败   （本次新增）
+回归：ux_fixes 21 · zone_auto 32 · node_scroll 21 · md_render 46
+      touch_link 17 · tablet_run 37 · dev_mode 10 · dev_cache 15
+      canvases_logic 37 · multi_canvas 28
+```
+
+全仓仅剩 `js/nodes.js:167` 一处 placeholder 文案，不再有把提示语写入 `text` 的调用。
