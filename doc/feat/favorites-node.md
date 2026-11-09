@@ -133,3 +133,58 @@ export function selectNode(id) {
 - 不改动任何现有 localStorage 键（`mc_canvas:*`、`mc_tasks`、`mc_canvases`）。
 - `state.selectedNodeId` 属新增字段，现有代码不读它，无回归风险。
 - 离线单文件版需重新 `node build.js`。
+
+---
+
+## 10. 实现与校验结果
+
+### 10.1 落地清单
+
+| 文件 | 改动 |
+|---|---|
+| `js/store.js`（新增） | IndexedDB 薄封装：`openStore()` + `put/get/getAll/delete/clear`；`backend` 暴露 `'idb'|'local'`；3s 打开超时；`blobToDataURL/dataURLToBlob` 供降级路径 |
+| `js/favorites.js`（新增） | `favoriteNode / listFavoriteNodes / getFavorite / removeFavorite / restoreNode`；收藏面板（`openFavoritesPanel / refreshFavoritesPanel / showFavorite / importFavorite / bindFavorites`）；`viewportCenterWorld()` |
+| `js/state.js` | 新增 `state.selectedNodeId` |
+| `js/nodes.js` | `selectNode()` 同步维护 `selectedNodeId`；`removeNode()` 清空；标题栏加 `.fav-node`（⭐）；拖动排除列表加入该按钮 |
+| `js/main.js` | `bindFavorites()`；注入 `HOST.favoriteNodeById`（避免 nodes ↔ favorites 循环依赖） |
+| `index.html` | 侧栏加 `#openFavorites` 按钮与 `#favPanel`（列表 + 预览） |
+| `styles.css` | 收藏面板样式；`.fav-node` 绝对定位到左侧圆点，不占 flex 空间 |
+| `build.js` | `ORDER` 加入 `store.js`、`favorites.js` |
+
+### 10.2 fix 阶段修掉的问题
+
+1. **并发收藏丢数据**（高）：`newFavId()` 用「时间戳 + 进程内序号」，
+   两个标签页同一毫秒收藏会生成相同 id，后写覆盖先写。
+   → 改用 `crypto.randomUUID()`，不可用时回落「时间戳+随机数+序号」。
+   新增 `[8]` 双标签页并发断言。
+2. **`main.js` 缺 `HOST` 导入**（高）：单文件构建把它掩盖了（同一作用域已有 `HOST`），
+   只有 `e2e_dev_mode` 的原生 ES Module 路径暴露 `ReferenceError`。
+3. **⭐ 挤压标题栏**：导致 `e2e_zone_auto` 的「标题栏中心不落在交互控件上」回归。
+   → 改为 `position: absolute` 贴左侧圆点，`hover/selected` 时才显现。
+
+### 10.3 测试结果
+
+```
+node --test tests/*.mjs          45 通过，0 失败
+tests/e2e_favorites_node.cjs     41 通过，0 失败   ← 本次新增
+回归：ux_fixes 21 · zone_auto 32 · node_scroll 21 · md_render 46
+      touch_link 17 · tablet_run 37 · dev_mode 10 · dev_cache 15
+      canvases_logic 37 · multi_canvas 28 · add_doc_empty 13
+```
+
+全量 **357 项断言，0 失败**。
+
+### 10.4 使用方式
+
+- **收藏**：节点标题栏左侧的 ⭐（hover/选中时显示）；或选中节点后点侧栏「⭐ 收藏」。
+- **查阅**：侧栏「⭐ 收藏」打开面板 → 点列表项看只读预览（Markdown 已渲染 / 图片直显）。
+- **导入**：预览区右上「⬇ 导入到画布」，节点落在**当前视口中心**并自动选中。
+- **删除**：列表项右侧 🗑（二次确认，同时清理 `items` 与 `blobs`）。
+
+### 10.5 已知限制
+
+- 收藏是**快照**：之后修改原节点不会同步到已收藏项，反之亦然。
+- 降级到 localStorage 时容量约 5 MB，带图收藏容易超限，会明确报错并建议删除旧收藏。
+- 暂无重命名收藏、暂无标签/搜索（按约定不做分类索引）。
+- 收藏面板挂在侧栏内，窄屏需先展开对话栏（`≡ 对话`）。
+- **「收藏图」尚未实现**，按约定作为下一条 feat。
