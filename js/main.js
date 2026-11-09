@@ -1,7 +1,7 @@
 // =========================================================================
 // main.js —— 入口：装配事件与初始化
 // =========================================================================
-import { DBG, flashToast, state, view } from './state.js';
+import { DBG, HOST, flashToast, state, view } from './state.js';
 import {
   activeCanvasId, createCanvas, duplicateCanvas, ensureRepo, listCanvases,
   removeCanvas, renameCanvas, switchCanvas,
@@ -11,12 +11,16 @@ import { addEdge, layoutEdgeLabel, redrawEdges } from './edges.js';
 import { bindCanvasDrop, importFiles, importFromUrl } from './io1.js';
 import { autosaveCanvas, exportCanvasData, exportToFile, flushCanvas, importFromFile, restoreCanvas } from './io2.js';
 import { bindMiniMapClick, drawMiniMap } from './minimap.js';
-import { createNode } from './nodes.js';
+import { createNode, selectNode } from './nodes.js';
 import { refreshLevelFilter, refreshOutline } from './outline.js';
 import { runAll, runSelection } from './run.js';
 import { createTask, loadTasks, refreshTasks, switchOlTab } from './tasks.js';
 import { applyView, canvasEl, centerContent, fitToContent, zoomAt } from './viewport.js';
 import { createZone } from './zones.js';
+import {
+  bindFavorites, favoriteSelectedNode, importFavorite, listFavoriteNodes,
+  openFavoritesPanel, removeFavorite, restoreNode, showFavorite, viewportCenterWorld,
+} from './favorites.js';
 
 // =========================================================================
 // 12.0 多画布：选择器 + 管理菜单
@@ -255,6 +259,17 @@ function init() {
   });
   bindMiniMapClick();
   bindSidebar();
+  bindFavorites();
+
+  // 节点标题栏的 ⭐：nodes.js 不能直接 import favorites（会形成循环依赖，
+  // 且单文件构建靠函数声明顺序拼接），故通过 HOST 注入回调。
+  HOST.favoriteNodeById = async (nodeId) => {
+    const prev = state.selectedNodeId;
+    selectNode(nodeId);
+    const fid = await favoriteSelectedNode();
+    if (!fid && prev) selectNode(prev);
+    return fid;
+  };
 
   // 画布变化时自动刷新侧边栏快照（节流，避免拖拽时每帧重绘）
   let snapTimer = null;

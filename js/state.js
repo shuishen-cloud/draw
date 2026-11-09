@@ -33,6 +33,7 @@ export const state = {
   edges: {},   // id -> { id, source, target, command, labelEl }
   zones: {},   // id -> { id, title, x, y, w, h, color, level, el }
   selectedEdgeId: null,
+  selectedNodeId: null,   // 当前选中的节点（收藏等操作需要）
   filterZoneId: 'all',   // 层级过滤：'all' 或某个 zoneId
   tasks: {},             // id -> { id, name, edgeIds: [] }
   activeTaskId: null,

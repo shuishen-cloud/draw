@@ -46,6 +46,7 @@ export function removeNode(id) {
     .forEach(e => removeEdge(e.id));
   node.el.remove();
   delete state.nodes[id];
+  if (state.selectedNodeId === id) state.selectedNodeId = null;
   refreshOutline();
   DBG.log('删除节点', id);
 }
@@ -71,6 +72,7 @@ export function renderNode(node) {
     <div class="bar">
       <span class="dot"></span>
       <span class="title" title="双击可重命名"></span>
+      <button class="fav-node" type="button" title="收藏此节点">⭐</button>
       <button class="run-node" type="button" title="运行此节点">▶</button>
       <button class="md-toggle" type="button" title="切换 编辑 / 预览">预览</button>
       <select class="zone-pick" title="归属区域（大纲章节）"></select>
@@ -180,7 +182,7 @@ export function renderNode(node) {
   bar.addEventListener('pointerdown', (e) => {
     // 标题栏里的控件各自处理交互，不能连带拖动节点。
     // 用 closest 而不是 classList，确保点到控件内部子元素也不误触。
-    if (e.target.closest('.close, .zone-pick, .md-toggle, .run-node')) return;
+    if (e.target.closest('.close, .zone-pick, .md-toggle, .run-node, .fav-node')) return;
     selectNode(node.id);
     startDrag(e, node);
   });
@@ -248,6 +250,15 @@ export function renderNode(node) {
     });
   }
   el.dataset.mode = 'edit';
+
+  // 收藏此节点：收藏当前节点快照（不影响节点本身）
+  const favBtn = el.querySelector('.fav-node');
+  favBtn.addEventListener('pointerdown', (e) => e.stopPropagation());
+  favBtn.addEventListener('click', async (e) => {
+    e.stopPropagation();
+    // 动态 import 会破坏单文件构建，这里用 main 注入的回调（同 scheduleSnapshot 的模式）
+    HOST.favoriteNodeById?.(node.id);
+  });
 
   // 预览态下点击内容区 → 切回编辑（“点一下就能改”）
   el.querySelector('.md-view').addEventListener('click', (e) => {
@@ -408,6 +419,8 @@ export function layoutNode(node) {
 }
 
 export function selectNode(id) {
+  // 除了切 class，还要记录到 state：收藏节点等操作依赖「当前选中」
+  state.selectedNodeId = (id && state.nodes[id]) ? id : null;
   Object.values(state.nodes).forEach(n => n.el.classList.toggle('selected', n.id === id));
 }
 

@@ -92,6 +92,17 @@
       <span class="chip" id="ctxChip">上下文：0 节点</span>
       <span class="spacer"></span>
       <button class="ghost" id="clearChat" title="清空对话">清空</button>
+      <button class="ghost" id="openFavorites" title="收藏（节点）">⭐ 收藏</button>
+    </div>
+    <!-- 收藏面板：查阅优先（只读预览），预览里的按钮才导入到画布 -->
+    <div id="favPanel" hidden>
+      <div class="fav-bar">
+        <span>⭐ 收藏（节点）</span>
+        <span class="spacer"></span>
+        <button class="ghost" id="favClose" title="关闭">×</button>
+      </div>
+      <div id="favList"></div>
+      <div id="favPreview"><div class="fav-empty">选择左边一条收藏查看</div></div>
     </div>
     <div class="sb-body">
       <div id="snapshot">

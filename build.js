@@ -34,6 +34,10 @@ const ORDER = [
   'io2.js',
   // canvases.js 依赖 io2.js 的 export/import/clear，必须在 io2 之后、main 之前
   'canvases.js',
+  // store.js 是 IndexedDB 薄封装（只依赖 state），favorites.js 依赖
+  // store + nodes/edges/md，必须排在它们之后、main 之前。
+  'store.js',
+  'favorites.js',
   'main.js',
 ];
 
