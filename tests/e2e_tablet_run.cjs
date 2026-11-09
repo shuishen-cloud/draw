@@ -192,10 +192,25 @@ const STUB_FETCH = `
     const n = state.nodes[id];
     n.el.querySelector('.run-node').click();
     await new Promise(r => setTimeout(r, 400));
-    return { calls: window.__fetchCalls.length, text: n.text };
+    // 执行节点默认处于预览态：用户看到的只有 .md-view，
+    // 结果必须同步出现在预览里，否则界面看起来像“没执行”。
+    const view = n.el.querySelector('.md-view');
+    return {
+      calls: window.__fetchCalls.length,
+      text: n.text,
+      mode: n.el.dataset.mode,
+      previewText: view?.textContent || '',
+      previewVisible: !!view && !view.hidden,
+    };
   }, execBtn.execId);
   check('点 ▶ 触发了请求', clickRun.calls >= 1, 'calls=' + clickRun.calls);
   check('执行结果写入节点', typeof clickRun.text === 'string', String(clickRun.text));
+  check('执行结果在预览区可见（默认预览态）',
+    clickRun.mode !== 'preview' || clickRun.previewText.includes('OK'),
+    `mode=${clickRun.mode} preview=${JSON.stringify(clickRun.previewText)}`);
+  check('运行后不再停留在「思考中…」',
+    !clickRun.previewText.includes('思考中') && !String(clickRun.text).includes('思考中'),
+    JSON.stringify(clickRun.previewText));
 
   console.log('\n[8] 工具栏「运行选中」按钮');
   const toolbar = await page.evaluate(() => {

@@ -235,13 +235,17 @@ const MD = [
     return {
       outputH2: o.el.querySelector('.md-view').querySelectorAll('h2').length,
       outputLi: o.el.querySelector('.md-view').querySelectorAll('li').length,
+      // exec 预览只展示结果，不拼提示词（否则结果被挤到提示词下面，
+      // 看起来像“没生成”）；提示词占位 h2 不应出现在预览里。
       execH2: x.el.querySelector('.md-view').querySelectorAll('h2').length,
       execStrong: x.el.querySelector('.md-view').querySelectorAll('strong').length,
+      execHasPromptText: x.el.querySelector('.md-view').textContent.includes('提示词标题'),
     };
   });
   check('output 节点渲染 h2', kinds.outputH2 === 1, String(kinds.outputH2));
   check('output 节点渲染 li', kinds.outputLi === 2, String(kinds.outputLi));
-  check('exec 节点渲染提示词 h2', kinds.execH2 === 1, String(kinds.execH2));
+  check('exec 预览不展示提示词（只展示结果）', kinds.execHasPromptText === false, String(kinds.execHasPromptText));
+  check('exec 预览 h2 数（来自结果本身）', kinds.execH2 === 0, String(kinds.execH2));
   check('exec 节点渲染结果 strong', kinds.execStrong === 1, String(kinds.execStrong));
 
   console.log('\n[8] 图片节点没有预览按钮');
