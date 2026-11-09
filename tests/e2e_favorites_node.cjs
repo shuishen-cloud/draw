@@ -240,7 +240,42 @@ const MD_TEXT = '# 收藏测试\n\n- 条目一\n- 条目二\n\n> 引用';
   check('降级页面无异常', ferrs.length === 0, ferrs.join(' | '));
   await fallbackPage.close();
 
-  console.log('\n[8] 无异常');
+  console.log('\n[8] 多标签页并发收藏：id 必须唯一，不能互相覆盖');
+  const pA = await ctx.newPage();
+  const pB = await ctx.newPage();
+  const ccErrs = [];
+  for (const pg of [pA, pB]) {
+    pg.on('pageerror', e => ccErrs.push(e.message));
+    await pg.goto('file://' + HTML);
+    await pg.waitForTimeout(400);
+  }
+  const [idA, idB] = await Promise.all([
+    pA.evaluate(async () => {
+      await clearCanvas();
+      const n = createNode('doc', { x: 0, y: 0, text: 'A' });
+      return favoriteNode(n.id, '并发A');
+    }),
+    pB.evaluate(async () => {
+      await clearCanvas();
+      const n = createNode('doc', { x: 0, y: 0, text: 'B' });
+      return favoriteNode(n.id, '并发B');
+    }),
+  ]);
+  check('两个标签页生成的收藏 id 不同', idA !== idB, `${idA} vs ${idB}`);
+  const both = await pA.evaluate(async () => {
+    await __resetStore();                 // 重新探测，读取最新库
+    const l = await listFavoriteNodes();
+    return { n: l.length, names: l.map(x => x.name).sort() };
+  });
+  check('两条并发收藏都保留', both.names.includes('并发A') && both.names.includes('并发B'),
+        JSON.stringify(both));
+  check('两个名字都在', both.names.includes('并发A') && both.names.includes('并发B'),
+        JSON.stringify(both.names));
+  check('并发页面无异常', ccErrs.length === 0, ccErrs.join(' | '));
+  await pA.close();
+  await pB.close();
+
+  console.log('\n[9] 无异常');
   check('主页面无 JS 异常', errs.length === 0, errs.join(' | '));
 
   await browser.close();

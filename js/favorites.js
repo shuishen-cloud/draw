@@ -19,8 +19,16 @@ import { refreshOutline } from './outline.js';
 let favSeq = 0;
 
 function newFavId() {
-  // 时间戳 + 序号：同一毫秒内多次收藏也不冲突
-  return 'f' + Date.now().toString(36) + '-' + (++favSeq).toString(36);
+  // 必须跨标签页唯一：两个标签页同一毫秒收藏时，
+  // 仅用「时间戳+序号」会生成相同 id（序号是各自进程内的），
+  // 后写覆盖先写 → 丢收藏。优先用 crypto.randomUUID，
+  // 不可用时回落到「时间戳+随机数+序号」。
+  const c = typeof crypto !== 'undefined' ? crypto : null;
+  if (c && typeof c.randomUUID === 'function') {
+    try { return 'f' + c.randomUUID(); } catch { /* 回退 */ }
+  }
+  const rand = Math.random().toString(36).slice(2, 10);
+  return 'f' + Date.now().toString(36) + '-' + rand + '-' + (++favSeq).toString(36);
 }
 
 // 收藏一个节点；返回收藏 id（失败返回 null）
