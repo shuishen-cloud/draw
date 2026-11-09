@@ -182,16 +182,20 @@ const MD_TEXT = '# 收藏测试\n\n- 条目一\n- 条目二\n\n> 引用';
     const store = await openStore();
     const item = await store.get('items', id);
     const key = item?.data?.srcKey;
+    const before = (await listFavoriteNodes()).length;
     const ok = await removeFavorite(id);
+    const rest = await listFavoriteNodes();
     return {
-      ok,
-      items: (await listFavoriteNodes()).length,
+      ok, before,
+      items: rest.length,
+      stillThere: rest.some(x => x.id === id),
       itemGone: (await store.get('items', id)) === undefined,
       blobGone: key ? (await store.get('blobs', key)) === undefined : true,
     };
   });
   check('removeFavorite 返回 true', del.ok === true);
-  check('列表已清空', del.items === 0, String(del.items));
+  check('列表少了一条', del.items === del.before - 1, `${del.before} -> ${del.items}`);
+  check('被删的那条已不在列表', del.stillThere === false);
   check('items 记录已删', del.itemGone === true);
   check('blobs 记录已删', del.blobGone === true);
 
