@@ -13,6 +13,43 @@
   #canvas { position: absolute; inset: 0; overflow: hidden; cursor: default; touch-action: none; }
   #canvas.panning { cursor: grabbing; }
 
+  /* ---------- 框选收藏 ---------- */
+  /* 框选模式下鼠标变十字，且不要触发画布平移的 grab 光标 */
+  #canvas.selecting { cursor: crosshair; }
+  #selectBox {
+    position: absolute; pointer-events: none; z-index: 5;
+    border: 1.5px dashed var(--accent);
+    background: rgba(79,70,229,.10);
+    border-radius: 4px;
+  }
+  #selectBox[hidden] { display: none; }
+  #selectHint {
+    position: absolute; left: 50%; top: 12px; transform: translateX(-50%);
+    z-index: 35; pointer-events: none;
+    background: rgba(17,24,39,.88); color: #fff;
+    font-size: 12px; padding: 6px 12px; border-radius: 999px;
+    white-space: nowrap;
+  }
+  #selectHint[hidden] { display: none; }
+  /* 面板里的子图预览 */
+  .fav-sub-line { font-size: 11px; color: #888; margin: -4px 0 8px; }
+  .fav-node-row {
+    padding: 7px 8px; border: 1px solid #eceef1; border-radius: 8px;
+    margin-bottom: 6px;
+  }
+  .fav-node-head { display: flex; align-items: center; gap: 6px; margin-bottom: 3px; }
+  .fav-tag {
+    font-size: 10px; color: #4f46e5; background: #eef2ff;
+    padding: 1px 5px; border-radius: 4px;
+  }
+  .fav-node-title { font-size: 12px; font-weight: 600; color: #333; }
+  .fav-sub-md { font-size: 12px; color: #555; max-height: 120px; overflow: auto; }
+  .fav-dim { color: #999; font-size: 12px; }
+  .fav-edge-row {
+    font-size: 12px; color: #333; padding: 3px 0;
+    border-bottom: 1px dashed #f0f1f3;
+  }
+
   /* 布局：画布区 + 右侧侧边栏（flex） */
   /* overflow: hidden —— 折叠的侧栏用 transform 移出屏幕但仍占布局宽度，
      不在 stage 裁剪的话溢出会传到 html，整页出现水平滚动条。 */

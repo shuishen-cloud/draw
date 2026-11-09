@@ -15,11 +15,12 @@ import { createNode, selectNode } from './nodes.js';
 import { refreshLevelFilter, refreshOutline } from './outline.js';
 import { runAll, runSelection } from './run.js';
 import { createTask, loadTasks, refreshTasks, switchOlTab } from './tasks.js';
-import { applyView, canvasEl, centerContent, fitToContent, zoomAt } from './viewport.js';
+import { applyView, canvasEl, centerContent, fitToContent, screenToWorld, zoomAt } from './viewport.js';
 import { createZone } from './zones.js';
 import {
-  bindFavorites, favoriteSelectedNode, importFavorite, listFavoriteNodes,
-  openFavoritesPanel, removeFavorite, restoreNode, showFavorite, viewportCenterWorld,
+  bindFavorites, favoriteSelectedNode, favoriteSubgraph, importFavorite, listFavoriteNodes,
+  openFavoritesPanel, refreshFavoritesPanel, removeFavorite, restoreNode,
+  restoreSubgraph, showFavorite, viewportCenterWorld,
 } from './favorites.js';
 
 // =========================================================================
@@ -143,6 +144,81 @@ function bindCanvasPicker() {
   });
 }
 
+// =========================================================================
+// 12.0b 框选收藏（只收藏一部分节点和边）
+// =========================================================================
+// 进入框选模式后，在画布上拖出矩形，松手即收藏框内节点与
+// 「两端都在框内」的边（闭包由 subgraph.js 保证）。
+function bindSubgraphSelect() {
+  const btn = document.getElementById('favSubgraph');
+  const canvas = document.getElementById('canvas');
+  const box = document.getElementById('selectBox');
+  const hint = document.getElementById('selectHint');
+  if (!btn || !canvas || !box) return;
+
+  let selecting = false;
+
+  const setMode = (on) => {
+    selecting = on;
+    canvas.classList.toggle('selecting', on);
+    if (hint) hint.hidden = !on;
+    if (!on) box.hidden = true;
+    btn.classList.toggle('running', on);
+  };
+
+  btn.addEventListener('click', () => setMode(!selecting));
+
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && selecting) setMode(false);
+  });
+
+  // 捕获阶段拦截：框选模式下不允许画布平移，否则拖拽会变成移动画布
+  canvas.addEventListener('pointerdown', (e) => {
+    if (!selecting || e.button !== 0) return;
+    // 点在节点上也不进入节点拖动，统一按框选处理
+    e.stopPropagation();
+    e.preventDefault();
+
+    const cRect = canvas.getBoundingClientRect();
+    const sx = e.clientX, sy = e.clientY;
+    box.hidden = false;
+    const paint = (x1, y1, x2, y2) => {
+      box.style.left = Math.min(x1, x2) - cRect.left + 'px';
+      box.style.top = Math.min(y1, y2) - cRect.top + 'px';
+      box.style.width = Math.abs(x2 - x1) + 'px';
+      box.style.height = Math.abs(y2 - y1) + 'px';
+    };
+    paint(sx, sy, sx, sy);
+
+    const onMove = (ev) => paint(sx, sy, ev.clientX, ev.clientY);
+    const onUp = async (ev) => {
+      window.removeEventListener('pointermove', onMove, true);
+      window.removeEventListener('pointerup', onUp, true);
+      box.hidden = true;
+      setMode(false);
+
+      // 屏幕坐标 -> world 坐标
+      const p1 = screenToWorld(sx, sy);
+      const p2 = screenToWorld(ev.clientX, ev.clientY);
+      const rect = {
+        x: Math.min(p1.x, p2.x), y: Math.min(p1.y, p2.y),
+        w: Math.abs(p2.x - p1.x), h: Math.abs(p2.y - p1.y),
+      };
+      if (rect.w < 4 || rect.h < 4) return;   // 误点，不当作框选
+
+      try {
+        const id = await favoriteSubgraph(rect);
+        if (id) await refreshFavoritesPanel();
+      } catch (err) {
+        DBG.err('框选收藏失败：', err);
+        flashToast('❌ ' + err.message);
+      }
+    };
+    window.addEventListener('pointermove', onMove, true);
+    window.addEventListener('pointerup', onUp, true);
+  }, true);
+}
+
 // 12. 初始化
 // =========================================================================
 function init() {
@@ -260,6 +336,7 @@ function init() {
   bindMiniMapClick();
   bindSidebar();
   bindFavorites();
+  bindSubgraphSelect();
 
   // 节点标题栏的 ⭐：nodes.js 不能直接 import favorites（会形成循环依赖，
   // 且单文件构建靠函数声明顺序拼接），故通过 HOST 注入回调。

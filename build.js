@@ -37,6 +37,9 @@ const ORDER = [
   // store.js 是 IndexedDB 薄封装（只依赖 state），favorites.js 依赖
   // store + nodes/edges/md，必须排在它们之后、main 之前。
   'store.js',
+  // subgraph.js 只做纯逻辑（依赖 state），favorites.js 会用它的
+  // pickSubgraph/remap/centerOffset，必须排在 favorites 之前。
+  'subgraph.js',
   'favorites.js',
   'main.js',
 ];

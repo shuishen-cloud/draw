@@ -36,10 +36,14 @@
 
   <div id="canvasWrap">
     <div id="toast"></div>
+    <!-- 框选模式提示条：进入框选才显示 -->
+    <div id="selectHint" hidden>⬚ 拖拽框选要收藏的节点与连线 · Esc 取消</div>
     <div id="canvas">
       <div id="world">
         <svg id="edges"></svg>
       </div>
+      <!-- 框选遮罩：相对 #canvas 定位，屏幕坐标（不随缩放） -->
+      <div id="selectBox" hidden></div>
     </div>
     <div id="minimap"><canvas></canvas></div>
     <div id="viewctl">
@@ -62,6 +66,7 @@
       <!-- 多画布：选择器负责切换，菜单按钮负责管理（新建/重命名/复制/删除） -->
       <select id="canvasPicker" title="切换画布"></select>
       <button class="ghost" id="canvasMenu">🗂 画布</button>
+      <button class="ghost" id="favSubgraph" title="框选一部分节点和连线收藏">⬚ 框选收藏</button>
       <button class="ghost" id="exportJson">⬇ 导出</button>
       <button class="ghost" id="importJson">⬆ 导入</button>
       <button id="runSel">▶ 运行选中</button>
