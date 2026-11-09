@@ -149,8 +149,10 @@ function init() {
     localStorage.setItem('deepseek_key', e.target.value.trim());
   });
 
+  // 新建的文档节点应当是空的：提示语交给 textarea 的 placeholder，
+  // 不能写进 text，否则用户每次都得先全选删掉（历史问题）。
   document.getElementById('addDoc').addEventListener('click', () =>
-    createNode('doc', { x: 120, y: 120, text: '在这里输入要处理的文档…' }));
+    createNode('doc', { x: 120, y: 120 }));
   document.getElementById('addOutput').addEventListener('click', () =>
     createNode('output', { x: 560, y: 120 }));
   document.getElementById('addImg').addEventListener('click', () =>
