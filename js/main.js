@@ -6,7 +6,7 @@ import {
   activeCanvasId, createCanvas, duplicateCanvas, ensureRepo, listCanvases,
   removeCanvas, renameCanvas, switchCanvas,
 } from './canvases.js';
-import { addMsg, bindSidebar, refreshSnapshot } from './chat.js';
+import { addMsg, bindSidebar, clearChat, refreshSnapshot } from './chat.js';
 import { addEdge, layoutEdgeLabel, redrawEdges } from './edges.js';
 import { bindCanvasDrop, importFiles, importFromUrl } from './io1.js';
 import { autosaveCanvas, exportCanvasData, exportToFile, flushCanvas, importFromFile, restoreCanvas } from './io2.js';
@@ -49,6 +49,8 @@ function afterCanvasSwitch() {
   refreshLevelFilter();
   refreshSnapshot();
   refreshCanvasPicker();
+  // 对话历史不跟随画布：不清掉会把上一张图的讨论带进新画布的上下文
+  clearChat();
 }
 
 function bindCanvasPicker() {
@@ -87,9 +89,10 @@ function bindCanvasPicker() {
     e.stopPropagation();
     if (panel.classList.contains('show')) closePanel(); else openPanel();
   });
-  // 点面板内部不关；点外部关闭
+  // 点面板内部不关；点外部关闭；Esc 也关
   panel.addEventListener('click', (e) => e.stopPropagation());
   document.addEventListener('click', closePanel);
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closePanel(); });
 
   document.getElementById('cpNew').addEventListener('click', () => {
     const name = prompt('新画布名称：', '画布 ' + (listCanvases().length + 1));
@@ -125,7 +128,10 @@ function bindCanvasPicker() {
     const id = activeCanvasId();
     const cur = listCanvases().find(c => c.id === id);
     if (!cur) return;
-    if (!confirm(`删除画布「${cur.name}」？此操作不可撤销（建议先「⬇ 导出」备份）。`)) return;
+    if (listCanvases().length <= 1) {
+      // 删最后一张会自动补一张空白的，语义上等于「清空重来」，需说清楚
+      if (!confirm(`只剩一张画布。删除会新建一张空白画布，当前内容将丢失。继续？`)) return;
+    } else if (!confirm(`删除画布「${cur.name}」？此操作不可撤销（建议先「⬇ 导出」备份）。`)) return;
     if (!removeCanvas(id)) return;
     afterCanvasSwitch();
     closePanel();

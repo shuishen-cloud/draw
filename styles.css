@@ -563,8 +563,7 @@
   #viewctl button:hover { background: #e2e5ea; }
   /* 窄屏：选择器限宽，避免把工具栏按钮挤出可视区 */
   #canvasPicker { max-width: 8em; font-size: 16px; }
-  #canvasPanel { min-width: 160px; }
-  #zoomLabel { font-size: 12px; color: #666; min-width: 42px; text-align: center; }
+  #canvasPanel { min-width: 160px; }  #zoomLabel { font-size: 12px; color: #666; min-width: 42px; text-align: center; }
 
   /* 小地图 */
   #minimap {
@@ -689,6 +688,18 @@
   }
   #toolbar > * { flex: none; }
   #toolbar button { font-size: 12px; padding: 6px 8px; white-space: nowrap; }
+  /* 画布切换器固定在工具栏左侧：工具栏是横向滚动的，
+     若按 DOM 顺序排在「💾 保存」后面就会被滚出可视区，用户找不到。
+     sticky 让它在滚动时始终贴住左侧，且仍参与滚动容器布局。 */
+  #toolbar #canvasPicker,
+  #toolbar #canvasMenu {
+    position: sticky; left: 0; z-index: 1;
+    order: -1;                      /* 视觉上排在第一个，不用改 HTML */
+    background: #fff;
+    box-shadow: 4px 0 6px -4px rgba(0,0,0,.18);
+  }
+  #toolbar #canvasMenu { left: 88px; }
+  #toolbar #canvasPicker { max-width: 6.5em; padding: 5px 4px; }
   /* 窄屏隐藏长提示：它会把工具栏撑成两层，在平板上太占地方 */
   #toolbar #hint { display: none; }
   /* 窄屏：视图控件缩小并上移，给工具栏留出底部空间，避免重叠遮挡 */

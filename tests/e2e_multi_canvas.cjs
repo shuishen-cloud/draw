@@ -154,7 +154,48 @@ function check(name, cond, extra = '') {
   check('active 指向剩余画布', afterRemove.active && afterRemove.active !== undefined);
   check('剩余至少一张', afterRemove.list >= 1, 'list=' + afterRemove.list);
 
-  console.log('\n[6] 无异常');
+  console.log('\n[6] 面板交互：点外部 / Esc 关闭');
+  await page.click('#canvasMenu');
+  const p1 = await page.evaluate(() => document.getElementById('canvasPanel').classList.contains('show'));
+  await page.mouse.click(5, 5);
+  const p2 = await page.evaluate(() => document.getElementById('canvasPanel').classList.contains('show'));
+  await page.click('#canvasMenu');
+  await page.keyboard.press('Escape');
+  const p3 = await page.evaluate(() => document.getElementById('canvasPanel').classList.contains('show'));
+  check('点按钮打开面板', p1 === true);
+  check('点外部关闭面板', p2 === false);
+  check('Esc 关闭面板', p3 === false);
+
+  console.log('\n[7] 切换画布会清空对话（避免上下文串到另一张图）');
+  const chatCleared = await page.evaluate(() => {
+    addMsg('assistant', '上一张画布的对话', '助手');
+    const before = document.getElementById('msgs').children.length;
+    const first = listCanvases()[0].id;
+    const other = listCanvases()[1]?.id || createCanvas('临时');
+    switchCanvas(other);
+    // 走 UI 路径才会触发 afterCanvasSwitch；这里直接调内部函数不可见，
+    // 故通过触发 select 的 change 来模拟真实操作
+    const sel = document.getElementById('canvasPicker');
+    sel.value = first;
+    sel.dispatchEvent(new Event('change'));
+    return { before, after: document.getElementById('msgs').children.length };
+  });
+  check('切换前有对话', chatCleared.before > 0, String(chatCleared.before));
+  check('切换后对话已清空', chatCleared.after === 0, String(chatCleared.after));
+
+  console.log('\n[8] 窄屏：画布切换器在可视区内');
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.waitForTimeout(300);
+  const narrow = await page.evaluate(() => {
+    const r = document.getElementById('canvasPicker').getBoundingClientRect();
+    const m = document.getElementById('canvasMenu').getBoundingClientRect();
+    return { selX: r.x, selW: r.width, menuX: m.x, vw: window.innerWidth };
+  });
+  check('切换器 x 在可视区', narrow.selX >= 0 && narrow.selX < narrow.vw, JSON.stringify(narrow));
+  check('切换器有宽度', narrow.selW > 40, String(narrow.selW));
+  check('管理按钮 x 在可视区', narrow.menuX >= 0 && narrow.menuX < narrow.vw, JSON.stringify(narrow));
+
+  console.log('\n[9] 无异常');
   check('全程无 JS 异常', errs.length === 0, errs.join(' | '));
 
   await browser.close();

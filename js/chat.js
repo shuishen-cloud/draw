@@ -229,16 +229,20 @@ export function bindSidebar() {
   document.getElementById('chatInput').addEventListener('keydown', (e) => {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendChat(); }
   });
-  document.getElementById('clearChat').addEventListener('click', () => {
-    chat.messages = [];
-    document.getElementById('msgs').innerHTML = '';
-    DBG.log('对话已清空');
-  });
+  document.getElementById('clearChat').addEventListener('click', clearChat);
   document.getElementById('toggleSidebar').addEventListener('click', () => {
     document.getElementById('sidebar').classList.toggle('collapsed');
     // 布局变化后要重画（画布宽度改变会影响连线坐标）
     requestAnimationFrame(() => { redrawEdges(); drawMiniMap(); });
   });
+}
+
+// 清空对话历史（切换画布时也要清：否则上下文会串到另一张图上）
+export function clearChat() {
+  chat.messages = [];
+  const box = document.getElementById('msgs');
+  if (box) box.innerHTML = '';
+  DBG.log('对话已清空');
 }
 
 // =========================================================================
