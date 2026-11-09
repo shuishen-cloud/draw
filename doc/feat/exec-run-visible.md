@@ -128,4 +128,90 @@ setOutput(node, text: string) -> void
 
 ## 7. 实现与校验结果
 
-（收尾阶段回填）
+### 7.1 改动清单
+
+| 文件 | 改动 |
+|---|---|
+| `js/run.js` | `runExecNode` 改走 `setOutput`；补 `.running` 脉冲、`try/catch/finally`、节流重绘 |
+| `js/exec.js` | `setOutput` 对 `exec` 节点预览只渲染结果 |
+| `js/nodes.js` | 死导入 `runExecNode` → `runNodeById`；`setNodeMode` 对 `exec` 只渲染结果 |
+| `tests/e2e_tablet_run.cjs` | 新增「结果在预览区可见」「不停留在思考中…」两条断言 |
+| `tests/e2e_md_render.cjs` | 「exec 渲染提示词 h2」→ 改为「预览不展示提示词」 |
+| `tests/e2e_dev_mode.cjs` | **新增**：开发态（`index.html` + 原生 ESM）e2e 冒烟 |
+
+### 7.2 关键判据（复现方式）
+
+```js
+// 修复前：结果写进了 hidden 的 .body，可见的 .md-view 仍是旧快照
+{ mode: 'preview', bodyHidden: true,
+  mdViewHTML: '<p>总结</p>',        // 用户看到的
+  textElValue: 'RESULT-TEXT' }      // 实际结果
+```
+
+判断「是不是这个 bug」只看一条：**`textEl` 有值但 `.md-view` 没有** →
+结果被写进了不可见 DOM。
+
+### 7.3 测试先红后绿
+
+新断言在旧实现下**确实变红**（否则等于没测）：
+
+```
+旧实现 + 新断言：
+  ✖ 执行结果在预览区可见（默认预览态） mode=preview preview="（无内容）"
+  ✖ exec 预览不展示提示词（只展示结果） true
+  ✖ exec 预览 h2 数（来自结果本身） 1
+  结果：44 通过，3 失败
+
+新实现：全部通过
+```
+
+`e2e_dev_mode.cjs` 同样验证过能抓住原 bug（临时回退 `nodes.js` 导入）：
+
+```
+  ✖ 请求已发出 calls=0
+  ✖ 结果在预览区可见 "（无内容）"
+  ✖ Markdown 渲染生效 false
+  ✖ 全程无 JS 异常 PAGEERROR: runNodeById is not defined
+  结果：6 通过，4 失败
+```
+
+### 7.4 全量回归
+
+```
+e2e_dev_cache      15 通过，0 失败
+ e2e_dev_mode       10 通过，0 失败   ← 新增
+e2e_md_render     46 通过，0 失败
+e2e_node_scroll   21 通过，0 失败
+e2e_port_clash    16 通过，0 失败
+e2e_tablet_run    37 通过，0 失败
+e2e_touch_link    17 通过，0 失败
+e2e_ux_fixes      21 通过，0 失败
+e2e_zone_auto     32 通过，0 失败
+单测：geom 12 / md 21 / zone 12，全 pass
+```
+
+合计 **215 项 e2e 断言 + 45 项单测断言，0 失败**。
+
+### 7.5 ⚠️ 服务器需要更新
+
+本次修改涉及 `js/` 三个模块，**已部署的运行方式不同，更新方式也不同**：
+
+| 部署形态 | 是否需操作 | 做法 |
+|---|---|---|
+| 单文件 `MutipleChat.html`（平板离线/静态托管） | **必须重新构建并覆盖** | 本地 `node build.js` → 覆盖服务器上的 `MutipleChat.html` |
+| 开发态 `node server.js`（`index.html` + `js/*.js`） | **需重启或刷新** | 拉取最新代码后重启 `node server.js`；浏览器强刷一次 |
+| Docker 镜像 | **必须重建镜像** | `docker build` 后重新部署容器（`js/` 已 COPY 进镜像） |
+| Nginx 静态部署 | **必须重新构建并同步** | `node build.js` 后把产物同步到站点根目录 |
+
+**验证是否已更新**：打开页面 → 建一个执行节点 → 填提示词 → 连一条上游 → 点 ▶。
+若结果直接出现在卡片里（此前必须手动点「编辑」再点「预览」才看得到），说明已生效。
+
+另外，开发态此前会抛 `ReferenceError: runNodeById is not defined`，点 ▶ 完全没反应；
+更新后该报错应消失。
+
+### 7.6 教训
+
+`build.js` 把所有模块拼进同一作用域，**会掩盖缺失的 ES import**。
+任何「只有开发态才炸」的问题都无法被跑 `MutipleChat.html` 的测试发现。
+故补 `tests/e2e_dev_mode.cjs`，让开发态也有冒烟覆盖。
+
