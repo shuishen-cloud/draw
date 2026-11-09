@@ -267,7 +267,55 @@ const PNG = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJA
   check('Esc 退出框选模式', m2.mode === false, JSON.stringify(m2));
   check('提示条一并隐藏', m2.hint === false);
 
-  console.log('\n[10] 无异常');
+  console.log('\n[10] 真实鼠标拖拽框选（走完整 UI 路径）');
+  await page.evaluate(() => {
+    closeFavoritesPanel();
+    clearCanvas();
+    createNode('doc', { x: 0, y: 0, w: 200, h: 150, title: '框A', text: 'aaa' });
+    createNode('output', { x: 300, y: 0, w: 200, h: 150, title: '框B' });
+    view.scale = 1;
+    centerContent();          // 把内容移到可见区中心
+  });
+  const box = await page.locator('#canvas').boundingBox();
+  // 用 world -> 屏幕 反算起止点，确保框住两个节点
+  const pts = await page.evaluate(() => {
+    const c = document.getElementById('canvas').getBoundingClientRect();
+    const toScreen = (wx, wy) => ({
+      x: c.left + wx * view.scale + view.x,
+      y: c.top + wy * view.scale + view.y,
+    });
+    return { p1: toScreen(-60, -60), p2: toScreen(560, 220) };
+  });
+  const x1 = pts.p1.x, y1 = pts.p1.y, x2 = pts.p2.x, y2 = pts.p2.y;
+  void box;
+
+  await page.click('#favSubgraph');
+  const cntBefore = await page.evaluate(async () => (await listFavoriteNodes()).length);
+  await page.mouse.move(x1, y1);
+  await page.mouse.down();
+  await page.mouse.move((x1 + x2) / 2, (y1 + y2) / 2, { steps: 5 });
+  await page.mouse.move(x2, y2, { steps: 5 });
+  await page.mouse.up();
+  await page.waitForTimeout(600);
+
+  const dragged = await page.evaluate(async () => {
+    const l = await listFavoriteNodes();
+    return {
+      n: l.length,
+      kind: l[0]?.kind,
+      nodes: l[0]?.meta?.nodeCount,
+      selecting: document.getElementById('canvas').classList.contains('selecting'),
+      boxHidden: document.getElementById('selectBox').hidden,
+    };
+  });
+  check('拖拽后产生一条收藏', dragged.n === cntBefore + 1,
+        `${cntBefore} -> ${dragged.n}`);
+  check('拖拽收藏的 kind 为 subgraph', dragged.kind === 'subgraph', String(dragged.kind));
+  check('拖拽命中了节点', (dragged.nodes || 0) >= 1, String(dragged.nodes));
+  check('拖完自动退出框选模式', dragged.selecting === false);
+  check('选框已隐藏', dragged.boxHidden === true);
+
+  console.log('\n[11] 无异常');
   check('全程无 JS 异常', errs.length === 0, errs.join(' | '));
 
   await browser.close();
