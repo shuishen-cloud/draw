@@ -1,4 +1,4 @@
-import { DBG, PREFIX, escapeHtml, linkState, seq, state, view } from './state.js';
+import { DBG, HOST, PREFIX, escapeHtml, linkState, seq, state, view } from './state.js';
 import { runEdge } from './exec.js';
 import { drawMiniMap } from './minimap.js';
 import { applyFilter } from './outline.js';
@@ -145,9 +145,9 @@ export function addEdge(source, target) {
   const edge = { id, source, target, command: '', labelEl: null };
   state.edges[id] = edge;
   createEdgeLabel(edge);
-  if (!window.__silentImport) redrawEdges();
+  if (!HOST.__silentImport) redrawEdges();
   DBG.log('创建连线', id, source, '->', target);
-  if (!window.__silentImport) window.scheduleSnapshot?.();
+  if (!HOST.__silentImport) HOST.scheduleSnapshot?.();
   return edge;
 }
 
@@ -305,7 +305,7 @@ export function editEdgeLabel(edge) {
       edge.command = input.value;
       DBG.log('命令更新:', JSON.stringify(edge.command),
               '| 可执行=', edge.command.trim().startsWith(PREFIX));
-      window.scheduleSnapshot?.();
+      HOST.scheduleSnapshot?.();
     }
     input.remove();
     label.style.visibility = 'visible';

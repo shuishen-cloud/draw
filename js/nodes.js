@@ -1,4 +1,4 @@
-import { DBG, escapeHtml, seq, state, view } from './state.js';
+import { DBG, HOST, escapeHtml, seq, state, view } from './state.js';
 import { bindLinkHandle, layoutEdgeLabel, redrawEdges } from './edges.js';
 import { renderMarkdown } from './md.js';
 import { readAsDataURL } from './io1.js';
@@ -31,9 +31,9 @@ export function createNode(kind, opts = {}) {
   state.nodes[id] = node;
   renderNode(node);                        // 创建 DOM
   layoutNode(node);
-  if (!window.__silentImport) refreshOutline();
+  if (!HOST.__silentImport) refreshOutline();
   DBG.log('创建节点', id, kind, 'zone=', node.zoneId);
-  if (!window.__silentImport) window.scheduleSnapshot?.();
+  if (!HOST.__silentImport) HOST.scheduleSnapshot?.();
   return node;
 }
 
@@ -138,7 +138,7 @@ export function renderNode(node) {
     out.addEventListener('input', () => {
       node.text = out.textContent;
       out.classList.toggle('empty', !node.text);
-      window.scheduleSnapshot?.();
+      HOST.scheduleSnapshot?.();
     });
   } else if (node.kind === 'exec') {
     // 执行节点：上方提示词（写在节点内），下方执行结果
@@ -151,7 +151,7 @@ export function renderNode(node) {
     prompt.value = node.prompt || '';
     prompt.addEventListener('input', () => {
       node.prompt = prompt.value;
-      window.scheduleSnapshot?.();
+      HOST.scheduleSnapshot?.();
     });
     const out = document.createElement('div');
     out.className = 'exec-out empty';
@@ -170,7 +170,7 @@ export function renderNode(node) {
     node.textEl = ta;
     ta.addEventListener('input', () => {
       node.text = ta.value;
-      window.scheduleSnapshot?.();
+      HOST.scheduleSnapshot?.();
       redrawEdges();                        // 内容变化可能改变节点尺寸，重画连线
     });
   }
@@ -191,7 +191,7 @@ export function renderNode(node) {
     e.stopPropagation();
     removeNode(node.id);
     redrawEdges();
-    window.scheduleSnapshot?.();
+    HOST.scheduleSnapshot?.();
   });
 
   // 连线：两个端口都是「拖出」热区（视觉上区分左右，语义上不限制方向）
@@ -218,7 +218,7 @@ export function renderNode(node) {
     DBG.log('节点', node.id, '归属区域 ->', node.zoneId);
     refreshOutline();
     applyFilter();
-    window.scheduleSnapshot?.();
+    HOST.scheduleSnapshot?.();
   });
   node.zonePickEl = pick;
 
@@ -296,7 +296,7 @@ export function loadImageFile(node, file) {
     node.src = reader.result;
     node.imgEl.src = node.src;
     node.el.classList.add('has-img');
-    window.scheduleSnapshot?.();
+    HOST.scheduleSnapshot?.();
     DBG.log('图片载入', node.id, file.name, Math.round(file.size / 1024) + 'KB');
   };
   reader.readAsDataURL(file);
@@ -357,7 +357,7 @@ export function renameNode(node, title) {
   }
   DBG.log('重命名', node.id, JSON.stringify(prev), '->', JSON.stringify(next));
   refreshOutline();
-  window.scheduleSnapshot?.();
+  HOST.scheduleSnapshot?.();
   return next;
 }
 
@@ -444,7 +444,7 @@ export function startDrag(e, node) {
     highlight(null);
     // 拖动结束按位置自动判定区域归属（拖出则清空）
     autoAssignZone(node);
-    window.scheduleSnapshot?.();   // 拖动结束保存位置
+    HOST.scheduleSnapshot?.();   // 拖动结束保存位置
   }
   window.addEventListener('pointermove', onMove);
   window.addEventListener('pointerup', onUp);
@@ -467,7 +467,7 @@ export function startResize(e, node) {
   function onUp() {
     window.removeEventListener('pointermove', onMove);
     window.removeEventListener('pointerup', onUp);
-    window.scheduleSnapshot?.();   // 缩放结束保存尺寸
+    HOST.scheduleSnapshot?.();   // 缩放结束保存尺寸
   }
   window.addEventListener('pointermove', onMove);
   window.addEventListener('pointerup', onUp);

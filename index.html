@@ -59,6 +59,9 @@
       <button class="ghost" id="importFiles">📂 导入文件</button>
       <button class="ghost" id="importUrl">🔗 从链接导入</button>
       <button class="ghost" id="saveCanvas">💾 保存</button>
+      <!-- 多画布：选择器负责切换，菜单按钮负责管理（新建/重命名/复制/删除） -->
+      <select id="canvasPicker" title="切换画布"></select>
+      <button class="ghost" id="canvasMenu">🗂 画布</button>
       <button class="ghost" id="exportJson">⬇ 导出</button>
       <button class="ghost" id="importJson">⬆ 导入</button>
       <button id="runSel">▶ 运行选中</button>
@@ -70,6 +73,14 @@
         连出线：按住节点<b>任意边框</b>往外拖（或拖两侧圆点）· 落点：目标节点边上即可，不用对准圆点<br>
         编辑命令：单击连线标签 · 执行：<kbd>Alt</kbd>+<kbd>Enter</kbd> · 平移：空白处拖拽 · 缩放：双指 / <kbd>Ctrl</kbd>滚轮
       </span>
+    </div>
+    <!-- 画布管理浮层：由 #canvasMenu 切换显示，位置在 JS 里贴着按钮算 -->
+    <div id="canvasPanel" role="menu" aria-label="画布管理">
+      <div class="cp-title">当前：<span id="cpCurrent">—</span></div>
+      <button id="cpNew">＋ 新建画布</button>
+      <button id="cpRename">✏ 重命名当前</button>
+      <button id="cpDuplicate">⧉ 复制当前</button>
+      <button id="cpDelete" class="danger">🗑 删除当前</button>
     </div>
     <button id="toggleOutline" title="展开/折叠大纲栏">📑 大纲</button>
     <button id="toggleSidebar" title="展开/折叠对话栏">≡ 对话</button>

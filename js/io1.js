@@ -1,4 +1,4 @@
-import { DBG, state } from './state.js';
+import { DBG, HOST, state } from './state.js';
 import { redrawEdges } from './edges.js';
 import { createNode } from './nodes.js';
 import { refreshOutline } from './outline.js';
@@ -79,7 +79,7 @@ export async function importFiles(files) {
   redrawEdges();
   fitToContent();
   refreshOutline();
-  window.scheduleSnapshot?.();
+  HOST.scheduleSnapshot?.();
   DBG.log('导入完成');
 }
 
@@ -118,7 +118,7 @@ export async function importFromUrl(url) {
       node.textEl.value = node.text;
     }
     DBG.log('抓取成功', node.title, node.text.length, '字');
-    redrawEdges(); refreshOutline(); window.scheduleSnapshot?.();
+    redrawEdges(); refreshOutline(); HOST.scheduleSnapshot?.();
   } catch (e) {
     const hint = offline
       ? '❌ 抓取失败：' + e.message + '\n（离线单文件版需联网，且依赖公共代理 r.jina.ai；或改用「本地服务」方式打开）'

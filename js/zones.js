@@ -1,4 +1,4 @@
-import { DBG, ZONE_COLORS, seq, state, view } from './state.js';
+import { DBG, HOST, ZONE_COLORS, seq, state, view } from './state.js';
 import { redrawEdges } from './edges.js';
 import { layoutNode, refreshAllZonePickers } from './nodes.js';
 import { applyFilter, refreshOutline } from './outline.js';
@@ -23,10 +23,10 @@ export function createZone(opts = {}) {
   state.zones[id] = zone;
   renderZone(zone);
   layoutZone(zone);
-  if (!window.__silentImport) {
+  if (!HOST.__silentImport) {
     refreshAllZonePickers();    // 新区域要出现在所有节点的下拉里
     refreshOutline();
-    window.scheduleSnapshot?.();
+    HOST.scheduleSnapshot?.();
   }
   DBG.log('创建区域', id, zone.title);
   return zone;
@@ -81,7 +81,7 @@ export function renderZone(zone) {
     function onUp() {
       window.removeEventListener('pointermove', onMove2);
       window.removeEventListener('pointerup', onUp);
-      window.scheduleSnapshot?.();   // 区域拖动结束保存
+      HOST.scheduleSnapshot?.();   // 区域拖动结束保存
     }
     window.addEventListener('pointermove', onMove2);
     window.addEventListener('pointerup', onUp);
@@ -104,7 +104,7 @@ export function renderZone(zone) {
     function onUp() {
       window.removeEventListener('pointermove', onMove);
       window.removeEventListener('pointerup', onUp);
-      window.scheduleSnapshot?.();   // 区域缩放结束保存
+      HOST.scheduleSnapshot?.();   // 区域缩放结束保存
     }
     window.addEventListener('pointermove', onMove);
     window.addEventListener('pointerup', onUp);
@@ -164,6 +164,6 @@ export function autoAssignZone(node) {
     if (pick) pick.value = next || '';
   }
   refreshOutline();
-  window.scheduleSnapshot?.();
+  HOST.scheduleSnapshot?.();
   return next;
 }

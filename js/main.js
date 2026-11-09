@@ -2,10 +2,14 @@
 // main.js —— 入口：装配事件与初始化
 // =========================================================================
 import { DBG, flashToast, state, view } from './state.js';
+import {
+  activeCanvasId, createCanvas, duplicateCanvas, ensureRepo, listCanvases,
+  removeCanvas, renameCanvas, switchCanvas,
+} from './canvases.js';
 import { addMsg, bindSidebar, refreshSnapshot } from './chat.js';
 import { addEdge, layoutEdgeLabel, redrawEdges } from './edges.js';
 import { bindCanvasDrop, importFiles, importFromUrl } from './io1.js';
-import { autosaveCanvas, exportCanvasData, exportToFile, importFromFile, restoreCanvas } from './io2.js';
+import { autosaveCanvas, exportCanvasData, exportToFile, flushCanvas, importFromFile, restoreCanvas } from './io2.js';
 import { bindMiniMapClick, drawMiniMap } from './minimap.js';
 import { createNode } from './nodes.js';
 import { refreshLevelFilter, refreshOutline } from './outline.js';
@@ -13,6 +17,121 @@ import { runAll, runSelection } from './run.js';
 import { createTask, loadTasks, refreshTasks, switchOlTab } from './tasks.js';
 import { applyView, canvasEl, centerContent, fitToContent, zoomAt } from './viewport.js';
 import { createZone } from './zones.js';
+
+// =========================================================================
+// 12.0 多画布：选择器 + 管理菜单
+// =========================================================================
+
+// 把仓库里的画布清单同步到 <select>
+function refreshCanvasPicker() {
+  const sel = document.getElementById('canvasPicker');
+  if (!sel) return;
+  const cur = activeCanvasId();
+  sel.innerHTML = '';
+  for (const c of listCanvases()) {
+    const opt = document.createElement('option');
+    opt.value = c.id;
+    opt.textContent = c.name;
+    if (c.id === cur) opt.selected = true;
+    sel.appendChild(opt);
+  }
+  const curName = listCanvases().find(c => c.id === cur)?.name || '—';
+  const label = document.getElementById('cpCurrent');
+  if (label) label.textContent = curName;
+}
+
+// 切换画布后：重算连线、小地图、大纲与快照（等价于一次轻量 reload）
+function afterCanvasSwitch() {
+  applyView();
+  redrawEdges();
+  drawMiniMap();
+  refreshOutline();
+  refreshLevelFilter();
+  refreshSnapshot();
+  refreshCanvasPicker();
+}
+
+function bindCanvasPicker() {
+  const sel = document.getElementById('canvasPicker');
+  const menuBtn = document.getElementById('canvasMenu');
+  const panel = document.getElementById('canvasPanel');
+  if (!sel || !menuBtn || !panel) return;
+
+  // ---- 切换 ----
+  sel.addEventListener('change', () => {
+    if (!switchCanvas(sel.value)) {
+      flashToast('❌ 画布不存在');
+      refreshCanvasPicker();
+      return;
+    }
+    afterCanvasSwitch();
+    flashToast('已切换到：' + (listCanvases().find(c => c.id === sel.value)?.name || ''));
+  });
+
+  // ---- 管理浮层 ----
+  const openPanel = () => {
+    const r = menuBtn.getBoundingClientRect();
+    panel.classList.add('show');
+    // 贴着按钮上方展开；越界则夹紧到视口内（窄屏工具栏在底部）
+    const pr = panel.getBoundingClientRect();
+    let left = Math.min(r.left, window.innerWidth - pr.width - 8);
+    let top = r.top - pr.height - 6;
+    if (top < 8) top = Math.min(r.bottom + 6, window.innerHeight - pr.height - 8);
+    panel.style.left = Math.max(8, left) + 'px';
+    panel.style.top = Math.max(8, top) + 'px';
+    refreshCanvasPicker();
+  };
+  const closePanel = () => panel.classList.remove('show');
+
+  menuBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    if (panel.classList.contains('show')) closePanel(); else openPanel();
+  });
+  // 点面板内部不关；点外部关闭
+  panel.addEventListener('click', (e) => e.stopPropagation());
+  document.addEventListener('click', closePanel);
+
+  document.getElementById('cpNew').addEventListener('click', () => {
+    const name = prompt('新画布名称：', '画布 ' + (listCanvases().length + 1));
+    if (name === null) return;          // 取消
+    createCanvas(name.trim() || undefined);
+    afterCanvasSwitch();
+    closePanel();
+    flashToast('✅ 已新建画布');
+  });
+
+  document.getElementById('cpRename').addEventListener('click', () => {
+    const id = activeCanvasId();
+    const cur = listCanvases().find(c => c.id === id);
+    if (!cur) return;
+    const name = prompt('重命名画布：', cur.name);
+    if (name === null) return;
+    renameCanvas(id, name);
+    refreshCanvasPicker();
+    flashToast('✅ 已重命名');
+  });
+
+  document.getElementById('cpDuplicate').addEventListener('click', () => {
+    const id = activeCanvasId();
+    const copy = duplicateCanvas(id);
+    if (!copy) return;
+    switchCanvas(copy);
+    afterCanvasSwitch();
+    closePanel();
+    flashToast('✅ 已复制为副本');
+  });
+
+  document.getElementById('cpDelete').addEventListener('click', () => {
+    const id = activeCanvasId();
+    const cur = listCanvases().find(c => c.id === id);
+    if (!cur) return;
+    if (!confirm(`删除画布「${cur.name}」？此操作不可撤销（建议先「⬇ 导出」备份）。`)) return;
+    if (!removeCanvas(id)) return;
+    afterCanvasSwitch();
+    closePanel();
+    flashToast('🗑 已删除画布');
+  });
+}
 
 // 12. 初始化
 // =========================================================================
@@ -57,12 +176,11 @@ function init() {
 
   // ---- 保存 / 导出 / 导入 ----
   document.getElementById('saveCanvas').addEventListener('click', () => {
-    try {
-      localStorage.setItem('mc_canvas', JSON.stringify(exportCanvasData()));
+    if (flushCanvas()) {
       DBG.log('已保存到本地');
       flashToast('✅ 已保存');
-    } catch (e) {
-      alert('保存失败（图片可能太大，请用「⬇ 导出」存成文件）：' + e.message);
+    } else {
+      alert('保存失败（图片可能太大，请用「⬇ 导出」存成文件）');
     }
   });
   document.getElementById('exportJson').addEventListener('click', exportToFile);
@@ -208,7 +326,10 @@ function init() {
   });
 
   // 优先从本地恢复上次画布；没有则创建示例
+  ensureRepo();
+  bindCanvasPicker();
   const restored = restoreCanvas();
+  refreshCanvasPicker();
   if (!restored) {
     const a = createNode('doc', { x: 100, y: 140, title: '文档', w: 340, h: 260,
       text: [
@@ -228,6 +349,7 @@ function init() {
     layoutEdgeLabel(e1);
     applyView();
     fitToContent();
+    flushCanvas();          // 示例内容立刻归属于当前画布，避免切换后被空白覆盖
   }
 
   refreshSnapshot();                    // 同步画布快照到侧边栏

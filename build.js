@@ -32,6 +32,8 @@ const ORDER = [
   'chat.js',
   'io1.js',
   'io2.js',
+  // canvases.js 依赖 io2.js 的 export/import/clear，必须在 io2 之后、main 之前
+  'canvases.js',
   'main.js',
 ];
 
@@ -72,6 +74,17 @@ function build() {
   if (leftover.length) {
     console.error('❌ 仍有未处理的 import/export:');
     leftover.slice(0, 10).forEach(({ l, i }) => console.error(`   行${i}: ${l.trim()}`));
+    process.exit(1);
+  }
+
+  // 检查 js/ 下是否有模块漏进 ORDER：
+  // 漏掉的模块在单文件版里会「函数未定义」，而这种错误 build 阶段看不出来，
+  // 只有跑到对应功能时才报 ReferenceError（历史上踩过一次）。
+  const onDisk = fs.readdirSync(path.join(ROOT, 'js'))
+    .filter(f => f.endsWith('.js'));
+  const missingInOrder = onDisk.filter(f => !ORDER.includes(f));
+  if (missingInOrder.length) {
+    console.error('❌ js/ 下有模块未加入 ORDER:', missingInOrder.join(', '));
     process.exit(1);
   }
 

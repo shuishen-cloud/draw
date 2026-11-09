@@ -79,36 +79,44 @@ function check(name, cond, extra = '') {
   check('首屏有示例节点（说明画布已载入）', init.nodes > 0, 'nodes=' + init.nodes);
 
   console.log('\n[2] 新建画布 → 空画布，旧图落盘');
-  const before = await page.evaluate(() => {
+  await page.evaluate(() => {
     window.__firstId = activeCanvasId();
     window.__firstNodes = Object.keys(state.nodes).length;
-    createCanvas('第二张');
-    return {
-      firstId: window.__firstId,
-      firstNodes: window.__firstNodes,
-      active: activeCanvasId(),
-      nodes: Object.keys(state.nodes).length,
-      options: document.getElementById('canvasPicker').options.length,
-    };
   });
+  // 走真实 UI：点「🗂 画布」→「＋ 新建画布」，prompt 用对话框拦截
+  page.once('dialog', d => d.accept('第二张'));
+  await page.click('#canvasMenu');
+  await page.click('#cpNew');
+  await page.waitForTimeout(200);
+  const before = await page.evaluate(() => ({
+    firstId: window.__firstId,
+    firstNodes: window.__firstNodes,
+    active: activeCanvasId(),
+    nodes: Object.keys(state.nodes).length,
+    options: document.getElementById('canvasPicker').options.length,
+  }));
   check('active 已切到新画布', before.active !== before.firstId, JSON.stringify(before));
   check('新画布为空', before.nodes === 0, 'nodes=' + before.nodes);
   check('选择器多了一项', before.options === 2, 'options=' + before.options);
 
   console.log('\n[3] 切回第一张');
-  const back = await page.evaluate(() => {
-    switchCanvas(window.__firstId);
-    return { nodes: Object.keys(state.nodes).length, active: activeCanvasId() };
-  });
+  const firstId = await page.evaluate(() => window.__firstId);
+  await page.selectOption('#canvasPicker', firstId);
+  await page.waitForTimeout(200);
+  const back = await page.evaluate(() => ({ nodes: Object.keys(state.nodes).length, active: activeCanvasId() }));
   check('切回后节点恢复', back.nodes === before.firstNodes, `${back.nodes} vs ${before.firstNodes}`);
   check('active 指向第一张', back.active === before.firstId);
 
   console.log('\n[4] 重命名并刷新页面');
+  page.once('dialog', d => d.accept('方案A'));
+  await page.click('#canvasMenu');
+  await page.click('#cpRename');
+  await page.waitForTimeout(200);
   const renamed = await page.evaluate(() => {
-    renameCanvas(window.__firstId, '方案A');
+    flushCanvas();                       // 重命名不动画布，手动落盘保证刷新后一致
     const sel = document.getElementById('canvasPicker');
     const opt = [...sel.options].find(o => o.value === window.__firstId);
-    return { text: opt?.textContent || '', flush: flushCanvas() };
+    return { text: opt?.textContent || '', all: [...sel.options].map(o => o.textContent) };
   });
   check('选择器文字已更新', renamed.text === '方案A', renamed.text);
 
@@ -127,16 +135,22 @@ function check(name, cond, extra = '') {
   check('刷新后仍载入当前画布内容', afterReload.nodes > 0, 'nodes=' + afterReload.nodes);
 
   console.log('\n[5] 删除当前画布 → 自动回落');
+  page.once('dialog', d => d.accept());
+  await page.click('#canvasMenu');
+  await page.click('#cpDelete');
+  await page.waitForTimeout(200);
   const afterRemove = await page.evaluate(() => {
     const cur = activeCanvasId();
-    removeCanvas(cur);
     return {
-      active: activeCanvasId(),
+      active: cur,
       list: listCanvases().length,
-      inList: listCanvases().some(c => c.id === cur),
+      inList: listCanvases().some(c => c.id === window.__firstId),
+      options: document.getElementById('canvasPicker').options.length,
     };
   });
-  check('当前画布已从清单移除', afterRemove.inList === false);
+  check('被删画布已从清单移除', afterRemove.inList === false);
+  check('下拉项同步减少', afterRemove.options === afterRemove.list,
+        `options=${afterRemove.options} list=${afterRemove.list}`);
   check('active 指向剩余画布', afterRemove.active && afterRemove.active !== undefined);
   check('剩余至少一张', afterRemove.list >= 1, 'list=' + afterRemove.list);
 

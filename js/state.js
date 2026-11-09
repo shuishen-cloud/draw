@@ -3,6 +3,20 @@
 // 所有模块从这里 import 共享状态。
 // =========================================================================
 
+// ---- 宿主环境 ----------------
+// 浏览器里就是 window；在 Node（node --test 跑纯逻辑测试）下给一个空壳，
+// 让模块顶层不因 window/document 未定义而直接崩掉。
+// 只承载「命名空间属性（__silentImport / scheduleSnapshot / DBG ...）」，
+// 需要真实 DOM 的调用都在函数体内，测试里不会执行到。
+export const HOST = typeof window !== 'undefined' ? window : globalThis;
+
+/**
+ * 取 DOM 元素。
+ * 用 documentRef() 而不是直接写 document：模块顶层可以安全 import，
+ * 真的没 DOM 时返回 null，由调用方按「元素不存在」处理。
+ */
+export const documentRef = () => (typeof document !== 'undefined' ? document : null);
+
 export const PREFIX = '🖐️';
 export const API_URL = 'https://api.deepseek.com/chat/completions';
 

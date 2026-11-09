@@ -1,4 +1,4 @@
-import { DBG, seq, state, view } from './state.js';
+import { DBG, HOST, seq, state, view } from './state.js';
 import { refreshSnapshot } from './chat.js';
 import { addEdge, redrawEdges } from './edges.js';
 import { readAsText } from './io1.js';
@@ -38,7 +38,7 @@ export function importCanvasData(data) {
   if (!data || data.format !== 'mutiplechat-canvas') {
     throw new Error('不是有效的画布文件');
   }
-  window.__silentImport = true;   // 导入期间跳过逐项副作用，避免卡顿
+  HOST.__silentImport = true;   // 导入期间跳过逐项副作用，避免卡顿
   try {
     clearCanvas();
 
@@ -98,7 +98,7 @@ export function importCanvasData(data) {
   refreshSnapshot();
   DBG.log('画布已导入：', (data.nodes || []).length, '节点,', (data.edges || []).length, '连线');
   } finally {
-    window.__silentImport = false;
+    HOST.__silentImport = false;
   }
 }
 
@@ -120,13 +120,16 @@ export function clearCanvas() {
 
 
 // ---- localStorage 自动保存 ----
+// 多画布：正文写到「当前画布 id」对应的键（mc_canvas:<id>），
+// 不再写单键 mc_canvas，否则所有画布会互相覆盖。
+import { activeCanvasId, ensureRepo, keyOf, saveCurrent } from './canvases.js';
+
 let autosaveTimer = null;
 export function autosaveCanvas() {
   clearTimeout(autosaveTimer);
   autosaveTimer = setTimeout(() => {
     try {
-      localStorage.setItem('mc_canvas', JSON.stringify(exportCanvasData()));
-      DBG.log('已自动保存到本地');
+      if (saveCurrent()) DBG.log('已自动保存到本地');
     } catch (e) {
       // 通常是图片太大超出 localStorage 限额
       DBG.warn('自动保存失败（可能图片太大）：', e.message);
@@ -134,13 +137,28 @@ export function autosaveCanvas() {
   }, 500);
 }
 
+// 立即落盘（同步），用于切换画布/手动保存这种「不能等防抖」的场景
+export function flushCanvas() {
+  clearTimeout(autosaveTimer);
+  return saveCurrent();
+}
+
+// 恢复：先保证仓库可用（含旧数据迁移），再载入当前画布。
+// 注意：空画布也算「恢复成功」，但 main.js 需要区分「有内容」与「空」——
+// 首屏空画布应该铺示例节点，否则新用户看到一片白。
+// 故返回值改为：false = 没东西可显示（含空画布/读取失败）。
 export function restoreCanvas() {
-  const raw = localStorage.getItem('mc_canvas');
+  ensureRepo();
+  const id = activeCanvasId();
+  if (!id) return false;
+  const raw = localStorage.getItem(keyOf(id));
   if (!raw) return false;
   try {
-    importCanvasData(JSON.parse(raw));
-    DBG.log('已从本地恢复上次画布');
-    return true;
+    const data = JSON.parse(raw);
+    const hasContent = (data.nodes || []).length > 0 || (data.zones || []).length > 0;
+    importCanvasData(data);
+    DBG.log('已从本地恢复画布：', id, hasContent ? '' : '（空画布）');
+    return hasContent;
   } catch (e) {
     DBG.warn('本地画布恢复失败：', e.message);
     return false;

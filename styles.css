@@ -517,6 +517,33 @@
     padding: 7px 9px; border: 1px solid #d5d7db; border-radius: 8px;
     font-size: 13px; width: 230px;
   }
+
+  /* ---------- 多画布选择器 ---------- */
+  #canvasPicker {
+    padding: 6px 8px; border: 1px solid #d5d7db; border-radius: 8px;
+    font-size: 13px; background: #fff; color: #333; max-width: 10em;
+    text-overflow: ellipsis;
+  }
+  #canvasPicker:focus { outline: 2px solid rgba(79,70,229,.35); outline-offset: 1px; }
+
+  /* 画布管理浮层：不能用 alert/prompt 串四个操作，平板上 prompt 体验差 */
+  #canvasPanel {
+    position: absolute; z-index: 40; display: none;
+    background: #fff; border-radius: 12px; padding: 8px;
+    box-shadow: 0 6px 24px rgba(0,0,0,.18);
+    flex-direction: column; gap: 6px; min-width: 200px;
+  }
+  #canvasPanel.show { display: flex; }
+  #canvasPanel .cp-title {
+    font-size: 12px; color: #777; padding: 2px 4px 4px;
+    border-bottom: 1px solid #eee;
+  }
+  #canvasPanel button {
+    background: #eef0f3; color: #333; text-align: left;
+    font-size: 13px; padding: 8px 10px;
+  }
+  #canvasPanel button:hover { background: #e2e5ea; }
+  #canvasPanel button.danger { color: #dc2626; }
   /* 纯说明文字，不参与交互：它覆盖在工具栏上方，
      默认会被命中并拦住按钮的指针事件。 */
   #hint { color: #777; font-size: 12px; line-height: 1.5; pointer-events: none; }
@@ -534,6 +561,9 @@
   }
   #viewctl button { padding: 6px 10px; background: #eef0f3; color: #333; }
   #viewctl button:hover { background: #e2e5ea; }
+  /* 窄屏：选择器限宽，避免把工具栏按钮挤出可视区 */
+  #canvasPicker { max-width: 8em; font-size: 16px; }
+  #canvasPanel { min-width: 160px; }
   #zoomLabel { font-size: 12px; color: #666; min-width: 42px; text-align: center; }
 
   /* 小地图 */
