@@ -30,8 +30,9 @@ test('卡片配色：标题栏与圆点使用配色变量', () => {
 });
 
 test('色点按钮有非零尺寸（否则点不到）', () => {
-  const m = css.match(/\.node \.node-color\s*\{([^}]*)\}/);
-  assert.ok(m, '缺少 .node .node-color 样式块');
+  // 颜色按钮的尺寸现在与收藏按钮共用一条合并规则
+  const m = css.match(/\.node \.node-color,[\s\S]{0,80}?\{([^}]*)\}/);
+  assert.ok(m, '缺少颜色/收藏按钮的尺寸样式块');
   assert.match(m[1], /width:\s*1[0-9]px/, '色点按钮没有宽度，用户无法点击');
   assert.match(m[1], /height:\s*1[0-9]px/, '色点按钮没有高度');
 });
@@ -65,4 +66,36 @@ test('调色板的外部关闭不会在面板内部点击时提前触发', () =>
 
 test('「跟随类型默认」项可清除颜色', () => {
   assert.match(nodesJs, /cp-clear[^>]*data-color=""/);
+});
+
+// =========================================================================
+// 标题栏按钮布局（feat: color-fix 追加）
+// 背景：颜色按钮与收藏按钮都用 absolute; left:4px 叠在一起，
+//       表现为「点颜色没反应」「有的节点没有颜色选项」。
+// =========================================================================
+test('颜色按钮与收藏按钮不得使用绝对定位（否则会互相盖住）', () => {
+  // 取出两个选择器的样式块，确认没有 position: absolute
+  const blocks = css.match(/\.node \.node-color[^{]*\{[^}]*\}/g) || [];
+  const favBlocks = css.match(/\.node \.bar \.fav-node[^{]*\{[^}]*\}/g) || [];
+  assert.ok(blocks.length > 0, '缺少 .node .node-color 样式');
+  assert.ok(favBlocks.length > 0, '缺少 .node .bar .fav-node 样式');
+  for (const b of [...blocks, ...favBlocks]) {
+    assert.equal(/position:\s*absolute/.test(b), false, '标题栏按钮不应绝对定位：' + b.slice(0, 60));
+  }
+});
+
+test('颜色按钮与收藏按钮都必须有非零尺寸', () => {
+  const m = css.match(/\.node \.node-color,\s*\n\s*\.node \.bar \.fav-node \{([^}]*)\}/);
+  assert.ok(m, '缺少颜色/收藏按钮的合并尺寸规则');
+  assert.match(m[1], /width:\s*1[0-9]px/);
+  assert.match(m[1], /height:\s*1[0-9]px/);
+});
+
+test('标题栏按钮不靠 hover 才显示（触摸设备没有 hover）', () => {
+  const m = css.match(/\.node \.node-color,\s*\n\s*\.node \.bar \.fav-node \{([^}]*)\}/);
+  assert.match(m[1], /opacity:\s*1/, '按钮默认必须可见，不能 opacity:0 等 hover');
+});
+
+test('点颜色按钮不会连带拖动节点', () => {
+  assert.match(nodesJs, /closest\('[^']*\.node-color[^']*'\)/, 'pointerdown 排除列表缺少 .node-color');
 });
