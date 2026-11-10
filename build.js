@@ -28,6 +28,9 @@ const ORDER = [
   'edges.js',
   'exec.js',
   'run.js',
+  // shortcuts.js 只依赖 state/nodes/edges/viewport，且必须在 main.js 之前
+  // （main 的 init 里要调用 bindShortcuts）。
+  'shortcuts.js',
   'tasks.js',
   'chat.js',
   'io1.js',

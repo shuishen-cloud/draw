@@ -228,7 +228,9 @@ export function drawGhost(link) {
 export function createEdgeLabel(edge) {
   const el = document.createElement('div');
   el.className = 'edge-label placeholder';
-  el.textContent = '+ 命令';
+  // 空命令时给一句「怎么用」，而不是看起来像按钮的「+ 命令」
+  el.textContent = '点击写命令';
+  el.title = '双击编辑，例如「总结」「翻译」';
   worldEl().appendChild(el);       // 标签也进入 world 坐标系，随缩放平移
   edge.labelEl = el;
 
@@ -253,7 +255,7 @@ export function layoutEdgeLabel(edge) {
     text = escapeHtml(cmd);
     edge.labelEl.classList.remove('placeholder');
   } else {
-    text = '+ 命令';
+    text = '点击写命令';
     edge.labelEl.classList.add('placeholder');
   }
   // 若属于当前激活任务，加个小标记

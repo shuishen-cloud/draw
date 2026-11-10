@@ -6,7 +6,7 @@ import {
   activeCanvasId, createCanvas, duplicateCanvas, ensureRepo, listCanvases,
   removeCanvas, renameCanvas, switchCanvas,
 } from './canvases.js';
-import { addMsg, bindSidebar, clearChat, refreshSnapshot } from './chat.js';
+import { bindSidebar, clearChat, refreshSnapshot, syncChatEmpty } from './chat.js';
 import { addEdge, layoutEdgeLabel, redrawEdges } from './edges.js';
 import { bindCanvasDrop, importFiles, importFromUrl } from './io1.js';
 import { autosaveCanvas, exportCanvasData, exportToFile, flushCanvas, importFromFile, restoreCanvas } from './io2.js';
@@ -14,6 +14,7 @@ import { bindMiniMapClick, drawMiniMap } from './minimap.js';
 import { createNode, selectNode } from './nodes.js';
 import { refreshLevelFilter, refreshOutline } from './outline.js';
 import { runAll, runSelection } from './run.js';
+import { bindShortcuts } from './shortcuts.js';
 import { createTask, loadTasks, refreshTasks, switchOlTab } from './tasks.js';
 import { applyView, canvasEl, centerContent, fitToContent, screenToWorld, zoomAt } from './viewport.js';
 import { createZone } from './zones.js';
@@ -253,6 +254,19 @@ function init() {
   document.getElementById('addExec').addEventListener('click', () =>
     createNode('exec', { x: 300, y: 420 }));
 
+  // 空画布引导上的两个入口（只作用于首屏，不平移视图，原地出现）
+  document.getElementById('emptyAddDoc')?.addEventListener('click', () => {
+    const c = screenToWorld(
+      document.getElementById('canvasWrap').getBoundingClientRect().left + 240,
+      document.getElementById('canvasWrap').getBoundingClientRect().top + 200);
+    createNode('doc', { x: Math.round(c.x), y: Math.round(c.y) });
+  });
+  document.getElementById('emptyImport')?.addEventListener('click', () =>
+    document.getElementById('filePicker').click());
+
+  // 画布快捷键（Delete / 方向键 / Esc / Ctrl+0 / Ctrl± / F）
+  bindShortcuts();
+
   // ---- 左侧 Tab 与任务 ----
   document.querySelectorAll('.ol-tab').forEach(el =>
     el.addEventListener('click', () => switchOlTab(el.dataset.tab)));
@@ -476,15 +490,16 @@ function init() {
     flushCanvas();          // 示例内容立刻归属于当前画布，避免切换后被空白覆盖
   }
 
+  HOST.syncEmptyHint();                 // 首屏空画布引导
   refreshSnapshot();                    // 同步画布快照到侧边栏
   refreshOutline();                     // 初始化大纲
   loadTasks();                          // 载入已保存的任务
   refreshTasks();
   switchOlTab('outline');
   refreshLevelFilter();                 // 初始化层级过滤器
-  addMsg('assistant',
-    '你好，我能看到你当前的画布。可以问我：\n- 「概括当前图的结构」\n- 「N1 的内容讲了什么？」\n- 上传图片后「描述画布上的图片」',
-    '助手');
+  // 欢迎语不再塞成一条气泡：空态引导（#chatEmpty 里的示例问句 chip）
+  // 承担同样的作用，且可点击。clearChat 之后也能重新出现。
+  syncChatEmpty();
 
   // 布局变化后重算连线（侧边栏折叠/展开、窗口尺寸变化）
   if (window.ResizeObserver) {

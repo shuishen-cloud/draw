@@ -102,6 +102,7 @@ export function importCanvasData(data) {
   refreshOutline();
   refreshTasks();
   refreshSnapshot();
+  HOST.syncEmptyHint?.();
   DBG.log('画布已导入：', (data.nodes || []).length, '节点,', (data.edges || []).length, '连线');
   } finally {
     HOST.__silentImport = false;
@@ -180,8 +181,9 @@ export function clearCanvas() {
   state.tasks = {}; state.selectedEdgeId = null; state.activeTaskId = null;
   state.filterZoneId = 'all';
   seq.node = 0; seq.edge = 0; seq.zone = 0; seq.task = 0;
-  const msgs = document.getElementById('msgs');
-  if (msgs) msgs.innerHTML = '';
+  // 只清对话气泡，不要 innerHTML='' —— #chatEmpty（空态引导）也住在
+  // #msgs 里，整片清空会把它一起删掉，之后 clearChat/发送都再也找不到它。
+  document.querySelectorAll('#msgs .msg').forEach(el => el.remove());
   DBG.log('画布已清空');
 }
 

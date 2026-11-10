@@ -1,9 +1,115 @@
+  /* =======================================================================
+     设计 token
+     -----------------------------------------------------------------------
+     分三层，改主题只改这里：
+       1) 品牌色（accent / -weak / -hover）
+       2) 中性层级（surface 面 → subtle 次级面 → line 线 → ink 文字三级）
+       3) 语义色（ok / warn / danger）+ 阴影/圆角/动效时长
+     为什么保留 --border / --bg / --node-bg / --line 旧名：
+     全文件已有 ~50 处引用，一次性改名会把这次改动变成不可读的大 diff。
+     旧名 = 新 token 的别名，新代码一律用新名。
+     ======================================================================= */
   :root {
-    --bg: #f6f7f9;
-    --node-bg: #ffffff;
-    --border: #d5d7db;
+    /* 品牌色 */
     --accent: #4f46e5;
-    --line: #9aa0a6;
+    --accent-hover: #4338ca;
+    --accent-weak: #eef2ff;
+    --accent-weak-2: rgba(79,70,229,.12);
+
+    /* 中性层级 */
+    --surface: #ffffff;
+    --surface-2: #fafbfc;
+    --subtle: #f6f7f9;
+    --subtle-2: #eef0f3;
+    --subtle-3: #e2e5ea;
+    --line: #9aa0a6;          /* 连线/强分隔 */
+    --line-2: #e4e6eb;        /* 卡片描边 */
+    --ink: #1f2328;
+    --ink-2: #5b6270;
+    --ink-3: #8b919c;
+
+    /* 语义色 */
+    --ok: #16a34a;
+    --ok-weak: #ecfdf5;
+    --warn: #f59e0b;
+    --danger: #dc2626;
+
+    /* 阴影 / 圆角 / 动效 */
+    --sh-1: 0 1px 2px rgba(16,24,40,.06), 0 1px 3px rgba(16,24,40,.08);
+    --sh-2: 0 4px 16px rgba(16,24,40,.10);
+    --sh-3: 0 12px 32px rgba(16,24,40,.16);
+    --r-1: 6px;
+    --r-2: 10px;
+    --r-3: 14px;
+    --dur: .15s;
+
+    /* 旧名别名（勿在新代码里使用） */
+    --bg: var(--subtle);
+    --node-bg: var(--surface);
+    --border: #d5d7db;
+  }
+
+  /* =======================================================================
+     图标：mask-image 绘制，随文字颜色变化，不依赖任何 Emoji 字体
+     -----------------------------------------------------------------------
+     之前工具栏用 📂 💾 ⬚ 🗂 等字符，在没有彩色 Emoji 字体的设备上
+     直接渲染成 ☒ 豆腐块（三档截图均实测复现）。改成 CSS mask 后：
+       · 矢量，任意 DPI 清晰；
+       · 用 currentColor 着色，图标自动跟按钮 hover/禁用变色；
+       · 降级安全：mask 不支持时只剩一块透明，文字标签仍在。
+     ======================================================================= */
+  .ic {
+    display: inline-block; width: 14px; height: 14px;
+    flex: none; vertical-align: -2px;
+    background-color: currentColor;
+    -webkit-mask-repeat: no-repeat; mask-repeat: no-repeat;
+    -webkit-mask-position: center; mask-position: center;
+    -webkit-mask-size: contain; mask-size: contain;
+  }
+  button .ic { margin-right: 5px; }
+  button.icon-only { padding: 7px 9px; }
+  button.icon-only .ic { margin-right: 0; }
+
+  .ic-doc { -webkit-mask-image: var(--ic-doc); mask-image: var(--ic-doc); }
+  .ic-out { -webkit-mask-image: var(--ic-out); mask-image: var(--ic-out); }
+  .ic-img { -webkit-mask-image: var(--ic-img); mask-image: var(--ic-img); }
+  .ic-run { -webkit-mask-image: var(--ic-run); mask-image: var(--ic-run); }
+  .ic-play { -webkit-mask-image: var(--ic-play); mask-image: var(--ic-play); }
+  .ic-file { -webkit-mask-image: var(--ic-file); mask-image: var(--ic-file); }
+  .ic-link { -webkit-mask-image: var(--ic-link); mask-image: var(--ic-link); }
+  .ic-save { -webkit-mask-image: var(--ic-save); mask-image: var(--ic-save); }
+  .ic-stack{ -webkit-mask-image: var(--ic-stack); mask-image: var(--ic-stack); }
+  .ic-select{-webkit-mask-image: var(--ic-select); mask-image: var(--ic-select); }
+  .ic-down { -webkit-mask-image: var(--ic-down); mask-image: var(--ic-down); }
+  .ic-up   { -webkit-mask-image: var(--ic-up); mask-image: var(--ic-up); }
+  .ic-chat { -webkit-mask-image: var(--ic-chat); mask-image: var(--ic-chat); }
+  .ic-star { -webkit-mask-image: var(--ic-star); mask-image: var(--ic-star); }
+  .ic-outline{-webkit-mask-image: var(--ic-outline); mask-image: var(--ic-outline); }
+  .ic-task {-webkit-mask-image: var(--ic-task); mask-image: var(--ic-task); }
+  .ic-clip {-webkit-mask-image: var(--ic-clip); mask-image: var(--ic-clip); }
+  .ic-send {-webkit-mask-image: var(--ic-send); mask-image: var(--ic-send); }
+
+  :root {
+    /* 16×16 viewBox 的描边图形，stroke 用 currentColor 的写法不易放进 data URI
+       （mask 只看 alpha），所以这里统一用 fill 的实心剪影，单色更清晰。 */
+    --ic-doc: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M4 1h5l4 4v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1zm5 1.5V5h2.5L9 2.5zM5.5 8h5v1.2h-5V8zm0 2.6h5v1.2h-5v-1.2z'/%3E%3C/svg%3E");
+    --ic-out: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M2 3.5A1.5 1.5 0 0 1 3.5 2h9A1.5 1.5 0 0 1 14 3.5v9a1.5 1.5 0 0 1-1.5 1.5h-9A1.5 1.5 0 0 1 2 12.5v-9zM4 5v1.4h8V5H4zm0 3v1.4h5.5V8H4z'/%3E%3C/svg%3E");
+    --ic-img: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M2 3.5A1.5 1.5 0 0 1 3.5 2h9A1.5 1.5 0 0 1 14 3.5v9a1.5 1.5 0 0 1-1.5 1.5h-9A1.5 1.5 0 0 1 2 12.5v-9zm2.2 7.3h7.6L9.4 7.3 7.5 9.7 6.3 8.4 4.2 10.8zM5.6 4.6a1.35 1.35 0 1 0 0 2.7 1.35 1.35 0 0 0 0-2.7z'/%3E%3C/svg%3E");
+    --ic-run: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M2 12.5 5.5 3h1.8l3.5 9.5H9l-.9-2.6H4.1l-.9 2.6H2zm2.6-4h3.2L6.2 4.9 4.6 8.5zM11.4 6h2.9l-2.4 3 2.6 3.5h-2.1L10.5 9.9 9.1 12.5H7.2L9.7 9.5 7.4 6h2l1.2 2L11.4 6z'/%3E%3C/svg%3E");
+    --ic-play: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M4.5 2.8a.8.8 0 0 1 1.22-.67l7 5.2a.8.8 0 0 1 0 1.34l-7 5.2A.8.8 0 0 1 4.5 13.2V2.8z'/%3E%3C/svg%3E");
+    --ic-file: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M1.5 4A1.5 1.5 0 0 1 3 2.5h3l1.4 1.6H13A1.5 1.5 0 0 1 14.5 5.6v6.9A1.5 1.5 0 0 1 13 14H3a1.5 1.5 0 0 1-1.5-1.5V4z'/%3E%3C/svg%3E");
+    --ic-link: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M6.3 9.9a.9.9 0 0 1 0-1.3l2.4-2.4a.9.9 0 1 1 1.3 1.3L7.6 9.9a.9.9 0 0 1-1.3 0z'/%3E%3Cpath d='M9.2 3.4a2.9 2.9 0 0 1 4.1 4.1l-1.5 1.5-1.2-1.2 1.4-1.4A1.2 1.2 0 1 0 10.3 4.7L9 6 7.8 4.8 9.2 3.4zM6.8 12.6a2.9 2.9 0 0 1-4.1-4.1l1.5-1.5 1.2 1.2-1.4 1.4a1.2 1.2 0 0 0 1.7 1.7L7 9.9l1.2 1.2-1.4 1.5z'/%3E%3C/svg%3E");
+    --ic-save: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M2.5 2h9.2L14 4.3v9.2A1.5 1.5 0 0 1 12.5 15h-9A1.5 1.5 0 0 1 2 13.5v-10A1.5 1.5 0 0 1 2.5 2zM5 3.5v3.2h5V3.5H5zM4.5 9.2h7v4.3h-7V9.2z'/%3E%3C/svg%3E");
+    --ic-stack: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M8 1.4 15 5 8 8.6 1 5l7-3.6z'/%3E%3Cpath d='m2.6 7.4 1.4.7L8 10.1l4-2 1.4-.7L15 8.3 8 12 1 8.3l1.6-.9z'/%3E%3Cpath d='m2.6 10.3 1.4.7L8 13l4-2 1.4-.7L15 11.2 8 15l-7-3.8 1.6-.9z'/%3E%3C/svg%3E");
+    --ic-select: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M2 2h4v1.6H3.6V6H2V2zm8 0h4v4h-1.6V3.6H10V2zM2 10h1.6v2.4H6V14H2v-4zm10.4 0H14v4h-4v-1.6h2.4V10z' opacity='.9'/%3E%3Cpath d='M4.6 4.6h6.8v6.8H4.6z' opacity='.35'/%3E%3C/svg%3E");
+    --ic-down: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M7.2 2h1.6v7.1l2.6-2.6 1.1 1.1L8 12.2 3.5 7.6l1.1-1.1 2.6 2.6V2zM3 13.2h10V14.6H3v-1.4z'/%3E%3C/svg%3E");
+    --ic-up: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M7.2 14h1.6V6.9l2.6 2.6 1.1-1.1L8 3.8 3.5 8.4l1.1 1.1 2.6-2.6V14zM3 1.4h10V2.8H3V1.4z'/%3E%3C/svg%3E");
+    --ic-chat: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M2 3.6A1.6 1.6 0 0 1 3.6 2h8.8A1.6 1.6 0 0 1 14 3.6v6.2a1.6 1.6 0 0 1-1.6 1.6H8l-3.4 3v-3H3.6A1.6 1.6 0 0 1 2 9.8V3.6z'/%3E%3C/svg%3E");
+    --ic-star: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='m8 1.6 1.9 3.9 4.3.6-3.1 3 .7 4.3L8 11.4l-3.8 2 .7-4.3-3.1-3 4.3-.6L8 1.6z'/%3E%3C/svg%3E");
+    --ic-outline: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M2 3h12v1.4H2V3zm0 4.3h12v1.4H2V7.3zM2 11.6h8v1.4H2v-1.4z'/%3E%3C/svg%3E");
+    --ic-task: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M9.2 1.2 3 9.3h3.4L5.2 14.8 12 6.4H8.3l.9-5.2z'/%3E%3C/svg%3E");
+    --ic-clip: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M3.5 2h6.2L14 6.3v7.2A1.5 1.5 0 0 1 12.5 15h-9A1.5 1.5 0 0 1 2 13.5v-10A1.5 1.5 0 0 1 3.5 2zM9 2.4V6h3.6L9 2.4z'/%3E%3C/svg%3E");
+    --ic-send: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M1.7 7.1 14 1.6a.5.5 0 0 1 .66.65L9.4 14.3a.5.5 0 0 1-.93.03L6.3 9.9a.8.8 0 0 0-.4-.4L1.68 8.03a.5.5 0 0 1 .02-.93z'/%3E%3C/svg%3E");
   }
   * { box-sizing: border-box; }
   html, body { margin: 0; height: 100%; overflow: hidden;
@@ -31,6 +137,36 @@
     white-space: nowrap;
   }
   #selectHint[hidden] { display: none; }
+
+  /* ---------- 空画布引导 ---------- */
+  /* 整层不吃指针（画布要能继续拖），只有按钮恢复 auto。
+     否则首屏会变成「点了空白处却拖不动画布」。 */
+  #emptyHint {
+    position: absolute; inset: 0; z-index: 12;
+    display: flex; align-items: center; justify-content: center;
+    pointer-events: none;
+    opacity: 0; transition: opacity var(--dur);
+  }
+  /* [hidden] 必须压过上方的 display:flex，否则空态永远在 */
+  #emptyHint[hidden] { display: none; }
+  #emptyHint.show { opacity: 1; }
+  #emptyHint .eh-card {
+    width: min(420px, calc(100% - 48px));
+    background: var(--surface); border: 1px solid var(--line-2);
+    border-radius: var(--r-3); box-shadow: var(--sh-2);
+    padding: 20px 22px; pointer-events: none;
+  }
+  #emptyHint .eh-title {
+    font-size: 16px; font-weight: 700; color: var(--ink); margin-bottom: 10px;
+  }
+  #emptyHint .eh-steps {
+    margin: 0 0 16px; padding-left: 1.3em;
+    font-size: 13px; line-height: 1.85; color: var(--ink-2);
+  }
+  #emptyHint .eh-steps b { color: var(--ink); font-weight: 600; }
+  #emptyHint .eh-actions { display: flex; gap: 8px; }
+  #emptyHint .eh-actions button { pointer-events: auto; }
+  #emptyHint kbd { pointer-events: none; }
   /* 面板里的子图预览 */
   .fav-sub-line { font-size: 11px; color: #888; margin: -4px 0 8px; }
   .fav-node-row {
@@ -85,9 +221,12 @@
   }
   .ol-tab {
     flex: 1; text-align: center; padding: 9px 6px; font-size: 12.5px;
-    font-weight: 600; color: #777; cursor: pointer; user-select: none;
+    font-weight: 600; color: var(--ink-3); cursor: pointer; user-select: none;
     border-bottom: 2px solid transparent;
+    display: inline-flex; align-items: center; justify-content: center;
+    transition: color var(--dur), background-color var(--dur);
   }
+  .ol-tab .ic { margin-right: 5px; }
   .ol-tab:hover { background: #f7f8fa; color: #333; }
   .ol-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
   .ol-pane { flex: 1; display: flex; flex-direction: column; min-height: 0; }
@@ -301,7 +440,12 @@
   }
   .edge-label:hover { border-color: var(--accent); color: var(--accent); }
   .edge-label.executable { border-color: var(--accent); color: var(--accent); font-weight: 600; }
-  .edge-label.placeholder { color: #b7bbc2; font-style: italic; }
+  /* 空命令：比正文更淡，且不假装成按钮（之前「+ 命令」像可点的添加入口） */
+  .edge-label.placeholder {
+    color: var(--ink-3); font-style: normal; font-size: 11.5px;
+    border-style: dashed; background: rgba(255,255,255,.92);
+  }
+  .edge-label.placeholder:hover { border-style: solid; }
   /* 编辑态：变成一个真正的输入框 */
   .edge-input {
     position: absolute; z-index: 10;
@@ -318,11 +462,23 @@
     display: flex; flex-direction: column;
     background: var(--node-bg);
     border: 1.5px solid var(--border); border-radius: 10px;
-    box-shadow: 0 2px 10px rgba(0,0,0,.06);
+    box-shadow: var(--sh-1);
     min-width: 120px; min-height: 80px;
+    transition: box-shadow var(--dur), border-color var(--dur);
     overflow: visible;
   }
-  .node.selected { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(79,70,229,.15), 0 2px 10px rgba(0,0,0,.06); }
+  .node.selected {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px rgba(79,70,229,.15), 0 2px 10px rgba(0,0,0,.06);
+  }
+  /* 左缘竖条：多节点时单靠一圈淡光很难确认「选中的是哪个」。
+     ::before 不占布局，也不影响端口热区（pointer-events:none）。 */
+  .node::before {
+    content: ''; position: absolute; left: -1.5px; top: 8px; bottom: 8px;
+    width: 3px; border-radius: 2px; background: transparent;
+    pointer-events: none; transition: background-color var(--dur);
+  }
+  .node.selected::before { background: var(--accent); }
   /* 拖线时的候选落点：整圈高亮，告诉用户「松手就连到这里」 */
   .node.link-target {
     border-color: var(--accent);
@@ -331,8 +487,8 @@
   .node.link-target .bar { background: rgba(79,70,229,.12); }
   .node .bar {
     display: flex; align-items: center; gap: 6px;
-    padding: 5px 8px; font-size: 12px; font-weight: 600; color: #555;
-    background: #f0f1f3; border-radius: 8px 8px 0 0;
+    padding: 5px 8px; font-size: 12px; font-weight: 600; color: var(--ink-2);
+    background: var(--subtle); border-radius: 8px 8px 0 0;
     cursor: grab; user-select: none;
   }
   /* 标题文字是拖动抓手：它总是占满剩余空间，比依赖空白区可靠 */
@@ -556,8 +712,9 @@
   #toolbar {
     position: absolute; left: 16px; bottom: 16px; z-index: 20;
     display: flex; gap: 8px; align-items: center; flex-wrap: wrap;
-    background: #fff; padding: 8px 10px; border-radius: 12px;
-    box-shadow: 0 3px 16px rgba(0,0,0,.12); font-size: 13px;
+    background: var(--surface); padding: 8px 10px; border-radius: var(--r-3);
+    border: 1px solid var(--line-2);
+    box-shadow: var(--sh-2); font-size: 13px;
     /* 为右侧 #viewctl 让出空间，否则窄屏下会重叠并遮住缩放按钮。
        用 max(...) 保证下限：可用宽度不足时 calc 会变负数，
        导致工具栏被压成一条竖线（按钮逐字换行）。 */
@@ -566,12 +723,31 @@
   button {
     border: 0; border-radius: 8px; padding: 7px 13px; font-size: 13px;
     background: var(--accent); color: #fff; cursor: pointer; font-weight: 600;
+    display: inline-flex; align-items: center; justify-content: center;
+    transition: background-color var(--dur), color var(--dur), box-shadow var(--dur), transform var(--dur);
   }
+  button:active:not(:disabled) { transform: translateY(.5px); }
+  button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
   button:disabled { background: #b9bbc3; cursor: not-allowed; }
-  button.running { background: #f59e0b; }
+  button.running { background: var(--warn); }
   button.running:hover { background: #d97706; }
-  button.ghost { background: #eef0f3; color: #333; }
-  button.ghost:hover { background: #e2e5ea; }
+  button.ghost { background: var(--subtle-2); color: var(--ink); font-weight: 500; }
+  button.ghost:hover { background: var(--subtle-3); }
+  button.small { padding: 4px 8px; font-size: 12px; }
+
+  /* 工具栏分组：同类动作贴在一起，组间一条细竖线。
+     之前 13 个按钮等权排一排，主操作「运行选中」淹没在灰胶囊里。 */
+  .tb-group { display: flex; gap: 6px; align-items: center; }
+  .tb-sep {
+    width: 1px; height: 20px; flex: none;
+    background: var(--line-2); margin: 0 2px;
+  }
+  #toolbar #runSel { box-shadow: 0 1px 2px rgba(79,70,229,.35); }
+  @media (max-width: 1024px) {
+    /* 窄屏隐藏分隔线：横向滚动时它们只是噪声 */
+    .tb-sep { display: none; }
+    .tb-group { gap: 6px; }
+  }
   input.key {
     padding: 7px 9px; border: 1px solid #d5d7db; border-radius: 8px;
     font-size: 13px; width: 230px;
@@ -715,7 +891,7 @@
   .sb-head {
     display: flex; align-items: center; gap: 8px;
     padding: 10px 12px; border-bottom: 1px solid #eceef1;
-    font-size: 13px; font-weight: 700; color: #333;
+    font-size: 13px; font-weight: 700; color: var(--ink);
   }
   .sb-head .spacer { flex: 1; }
   .sb-head .chip {
@@ -731,6 +907,10 @@
     padding: 8px 12px; font-size: 12px; color: #666; max-height: 130px; overflow: auto;
   }
   #snapshot .snap-title { font-weight: 700; color: #444; margin-bottom: 4px; display: flex; gap: 6px; align-items: center; }
+  #snapshot .snap-sub {
+    font-weight: 400; color: var(--ink-3); font-size: 11px;
+    background: var(--subtle-2); border-radius: 999px; padding: 1px 7px;
+  }
   #snapshot pre {
     margin: 0; white-space: pre-wrap; word-break: break-word;
     font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 11.5px; line-height: 1.5; color: #555;
@@ -742,6 +922,25 @@
 
   /* 消息列表 */
   #msgs { flex: 1; overflow-y: auto; padding: 12px; display: flex; flex-direction: column; gap: 10px; }
+  /* 对话空态：示例问句 chip。点了只填入输入框（不自动发送），
+     因为发送会消耗 API 额度，误触不该产生费用。 */
+  #chatEmpty {
+    display: flex; flex-direction: column; gap: 6px; align-items: flex-start;
+    padding: 4px 2px;
+  }
+  #chatEmpty[hidden] { display: none; }
+  #chatEmpty .ce-title {
+    font-size: 12px; color: var(--ink-3); margin-bottom: 2px;
+  }
+  #chatEmpty .ce-chip {
+    background: var(--surface); color: var(--ink-2);
+    border: 1px solid var(--line-2); border-radius: 999px;
+    padding: 5px 11px; font-size: 12px; font-weight: 500; text-align: left;
+    transition: color var(--dur), border-color var(--dur), background-color var(--dur);
+  }
+  #chatEmpty .ce-chip:hover {
+    color: var(--accent); border-color: var(--accent); background: var(--accent-weak);
+  }
   .msg { max-width: 92%; padding: 8px 11px; border-radius: 12px; font-size: 13px; line-height: 1.6; white-space: pre-wrap; word-break: break-word; }
   .msg.user { align-self: flex-end; background: var(--accent); color: #fff; border-bottom-right-radius: 4px; }
   .msg.assistant { align-self: flex-start; background: #f1f2f4; color: #222; border-bottom-left-radius: 4px; }
@@ -850,6 +1049,9 @@
   /* 画布切换器固定在工具栏左侧：工具栏是横向滚动的，
      若按 DOM 顺序排在「💾 保存」后面就会被滚出可视区，用户找不到。
      sticky 让它在滚动时始终贴住左侧，且仍参与滚动容器布局。 */
+  /* 注意：canvasPicker / canvasMenu 现在住在 .tb-group 里（工具栏分组后），
+     不再是 #toolbar 的直接子元素 —— 必须跟着放宽选择器，
+     否则 order/sticky 全部失效，切换器会被横向滚动挤出可视区。 */
   #toolbar #canvasPicker,
   #toolbar #canvasMenu {
     position: sticky; left: 0; z-index: 1;
@@ -857,6 +1059,8 @@
     background: #fff;
     box-shadow: 4px 0 6px -4px rgba(0,0,0,.18);
   }
+  /* 让「画布」这一组整体排到最前，组内两个控件仍按 DOM 顺序 */
+  #toolbar .tb-group:has(#canvasPicker) { order: -1; }
   #toolbar #canvasMenu { left: 88px; }
   #toolbar #canvasPicker { max-width: 6.5em; padding: 5px 4px; }
   /* 窄屏隐藏长提示：它会把工具栏撑成两层，在平板上太占地方 */

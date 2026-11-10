@@ -35,6 +35,7 @@ export function createNode(kind, opts = {}) {
   renderNode(node);                        // 创建 DOM
   layoutNode(node);
   if (!HOST.__silentImport) refreshOutline();
+  if (!HOST.__silentImport) HOST.syncEmptyHint?.();
   DBG.log('创建节点', id, kind, 'zone=', node.zoneId);
   if (!HOST.__silentImport) HOST.scheduleSnapshot?.();
   return node;
@@ -51,6 +52,7 @@ export function removeNode(id) {
   delete state.nodes[id];
   if (state.selectedNodeId === id) state.selectedNodeId = null;
   refreshOutline();
+  HOST.syncEmptyHint?.();
   DBG.log('删除节点', id);
 }
 

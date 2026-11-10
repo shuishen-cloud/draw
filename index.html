@@ -6,7 +6,7 @@
 <meta name="mobile-web-app-capable" content="yes" />
 <meta name="apple-mobile-web-app-capable" content="yes" />
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-<title>Canvas MVP · 节点 / 连线 / Alt+Enter 执行</title>
+<title>MutipleChat · 节点画布</title>
 <link rel="stylesheet" href="./styles.css" />
 </head>
 <body>
@@ -14,16 +14,16 @@
 <div id="stage">
   <aside id="outline">
     <div class="ol-tabs">
-      <span class="ol-tab active" data-tab="outline">📑 大纲</span>
-      <span class="ol-tab" data-tab="tasks">⚡ 任务</span>
+      <span class="ol-tab active" data-tab="outline"><i class="ic ic-outline"></i>大纲</span>
+      <span class="ol-tab" data-tab="tasks"><i class="ic ic-task"></i>任务</span>
       <!-- 窄屏抽屉模式下的收起入口：展开时外部 #toggleOutline 会隐藏，
            没有这个按钮就没有任何路可以收回侧栏 -->
-      <button class="drawer-close" id="olClose" title="收起大纲栏">✕</button>
+      <button class="drawer-close" id="olClose" title="收起大纲栏">×</button>
     </div>
     <div class="ol-pane" id="paneOutline">
       <div class="ol-head">
         <span class="spacer"></span>
-        <button class="ghost" id="addZone" style="padding:4px 8px;font-size:12px">＋区域</button>
+        <button class="ghost small" id="addZone">＋ 区域</button>
       </div>
       <div id="levelFilter"></div>
       <div class="ol-body" id="outlineBody"></div>
@@ -31,7 +31,7 @@
     <div class="ol-pane" id="paneTasks" style="display:none">
       <div class="ol-head">
         <span class="spacer"></span>
-        <button class="ghost" id="addTask" style="padding:4px 8px;font-size:12px">＋新建任务</button>
+        <button class="ghost small" id="addTask">＋ 新建任务</button>
       </div>
       <div class="ol-body" id="taskBody"></div>
     </div>
@@ -39,6 +39,21 @@
 
   <div id="canvasWrap">
     <div id="toast"></div>
+    <!-- 空画布引导：无节点时显示，只有一个按钮吃指针事件 -->
+    <div id="emptyHint" hidden>
+      <div class="eh-card">
+        <div class="eh-title">画布是空的</div>
+        <ol class="eh-steps">
+          <li>新建一个<b>文档节点</b>，写下你想处理的内容</li>
+          <li>从节点<b>边框</b>拖出连线，连到另一个节点</li>
+          <li>点击连线中间的标签写命令，按 <kbd>Alt</kbd>+<kbd>Enter</kbd> 执行</li>
+        </ol>
+        <div class="eh-actions">
+          <button id="emptyAddDoc">＋ 新建文档节点</button>
+          <button class="ghost" id="emptyImport">导入文件</button>
+        </div>
+      </div>
+    </div>
     <!-- 框选模式提示条：进入框选才显示 -->
     <div id="selectHint" hidden>⬚ 拖拽框选要收藏的节点与连线 · Esc 取消</div>
     <div id="canvas">
@@ -58,22 +73,37 @@
       <button id="toggleMap" title="显示/隐藏小地图">地图</button>
     </div>
     <div id="toolbar">
-      <input id="apiKey" class="key" type="password" placeholder="DeepSeek API Key" />
-      <button class="ghost" id="addDoc">＋ 文档节点</button>
-      <button class="ghost" id="addOutput">＋ 输出节点</button>
-      <button class="ghost" id="addImg">＋ 图片节点</button>
-      <button class="ghost" id="addExec">＋ 执行节点</button>
-      <button class="ghost" id="importFiles">📂 导入文件</button>
-      <button class="ghost" id="importUrl">🔗 从链接导入</button>
-      <button class="ghost" id="saveCanvas">💾 保存</button>
-      <!-- 多画布：选择器负责切换，菜单按钮负责管理（新建/重命名/复制/删除） -->
-      <select id="canvasPicker" title="切换画布"></select>
-      <button class="ghost" id="canvasMenu">🗂 画布</button>
-      <button class="ghost" id="favSubgraph" title="框选一部分节点和连线收藏">⬚ 框选收藏</button>
-      <button class="ghost" id="exportJson">⬇ 导出</button>
-      <button class="ghost" id="importJson">⬆ 导入</button>
-      <button id="runSel">▶ 运行选中</button>
-      <button id="runAll">全部运行 ▶</button>
+      <input id="apiKey" class="key" type="password" placeholder="DeepSeek API Key" autocomplete="off" />
+      <!-- 分组：新建 | 文件 | 画布/收藏 | 数据 | 运行（主操作在最后、实心强调） -->
+      <div class="tb-group">
+        <button class="ghost" id="addDoc"><i class="ic ic-doc"></i>文档</button>
+        <button class="ghost" id="addOutput"><i class="ic ic-out"></i>输出</button>
+        <button class="ghost" id="addImg"><i class="ic ic-img"></i>图片</button>
+        <button class="ghost" id="addExec"><i class="ic ic-run"></i>执行</button>
+      </div>
+      <span class="tb-sep"></span>
+      <div class="tb-group">
+        <button class="ghost" id="importFiles" title="导入本地文件为文档节点"><i class="ic ic-file"></i>文件</button>
+        <button class="ghost" id="importUrl" title="抓取网页正文为文档节点"><i class="ic ic-link"></i>链接</button>
+        <button class="ghost" id="saveCanvas" title="保存到本地"><i class="ic ic-save"></i>保存</button>
+      </div>
+      <span class="tb-sep"></span>
+      <div class="tb-group">
+        <!-- 多画布：选择器负责切换，菜单按钮负责管理（新建/重命名/复制/删除） -->
+        <select id="canvasPicker" title="切换画布"></select>
+        <button class="ghost icon-only" id="canvasMenu" title="画布管理"><i class="ic ic-stack"></i></button>
+        <button class="ghost icon-only" id="favSubgraph" title="框选一部分节点和连线收藏"><i class="ic ic-select"></i></button>
+      </div>
+      <span class="tb-sep"></span>
+      <div class="tb-group">
+        <button class="ghost icon-only" id="exportJson" title="导出为 JSON 文件"><i class="ic ic-down"></i></button>
+        <button class="ghost icon-only" id="importJson" title="从 JSON 文件导入"><i class="ic ic-up"></i></button>
+      </div>
+      <span class="tb-sep"></span>
+      <div class="tb-group">
+        <button id="runSel"><i class="ic ic-play"></i>运行选中</button>
+        <button class="ghost" id="runAll">全部运行</button>
+      </div>
       <input type="file" id="filePicker" multiple style="display:none"
              accept=".txt,.md,.markdown,.csv,.json,.log,.js,.ts,.py,.html,.css,.xml,.yaml,.yml,image/*" />
       <input type="file" id="jsonPicker" accept=".json" style="display:none" />
@@ -90,27 +120,27 @@
       <button id="cpDuplicate">⧉ 复制当前</button>
       <button id="cpDelete" class="danger">🗑 删除当前</button>
     </div>
-    <button id="toggleOutline" title="展开/折叠大纲栏">📑 大纲</button>
-    <button id="toggleSidebar" title="展开/折叠对话栏">≡ 对话</button>
+    <button id="toggleOutline" title="展开/折叠大纲栏"><i class="ic ic-outline"></i>大纲</button>
+    <button id="toggleSidebar" title="展开/折叠对话栏"><i class="ic ic-chat"></i>对话</button>
   </div>
 
   <aside id="sidebar">
     <div class="sb-head">
-      <span>💬 对话（看图）</span>
+      <span><i class="ic ic-chat"></i>对话</span>
       <span class="chip" id="ctxChip">上下文：0 节点</span>
       <span class="spacer"></span>
       <button class="ghost" id="clearChat" title="清空对话">清空</button>
-      <button class="ghost" id="openFavorites" title="收藏（节点）">⭐ 收藏</button>
+      <button class="ghost" id="openFavorites" title="收藏（节点）"><i class="ic ic-star"></i>收藏</button>
       <!-- 窄屏抽屉模式下的收起入口（同 #olClose） -->
       <button class="drawer-close" id="sbClose" title="收起对话栏">✕</button>
     </div>
     <!-- 收藏面板：查阅优先（只读预览），预览里的按钮才导入到画布 -->
     <div id="favPanel" hidden>
       <div class="fav-bar">
-        <span>⭐ 收藏（节点）</span>
+        <span>收藏（节点）</span>
         <span class="spacer"></span>
-        <button class="ghost" id="favPullChatTool" title="从 ChatTool 拉取收藏，先收进左侧列表；再逐条或全部导入画布">📥 从 ChatTool 拉取</button>
-        <button class="ghost" id="favPullAll" title="把收藏里所有 ChatTool 卡片导入到当前画布">⬇ 全部导入</button>
+        <button class="ghost" id="favPullChatTool" title="从 ChatTool 拉取收藏，先收进左侧列表；再逐条或全部导入画布">从 ChatTool 拉取</button>
+        <button class="ghost" id="favPullAll" title="把收藏里所有 ChatTool 卡片导入到当前画布">全部导入</button>
         <button class="ghost" id="favClose" title="关闭">×</button>
       </div>
       <div id="favList"></div>
@@ -118,17 +148,25 @@
     </div>
     <div class="sb-body">
       <div id="snapshot">
-        <div class="snap-title">📋 将随消息发送的画布快照 <span style="font-weight:400;color:#999">（自动更新）</span></div>
+        <div class="snap-title"><i class="ic ic-clip"></i>将随消息发送的画布快照 <span class="snap-sub">自动更新</span></div>
         <pre id="snapText">（空画布）</pre>
         <div class="thumbs" id="snapThumbs"></div>
       </div>
-      <div id="msgs"></div>
+      <div id="msgs">
+        <!-- 空态引导：由 chat.js 在无消息时显示；点击只填入输入框，不自动发送 -->
+        <div id="chatEmpty">
+          <div class="ce-title">我能看到画布内容，试着问：</div>
+          <button class="ce-chip" data-fill="帮我概括当前画布的结构">帮我概括当前画布的结构</button>
+          <button class="ce-chip" data-fill="N1 的内容讲了什么？">N1 的内容讲了什么？</button>
+          <button class="ce-chip" data-fill="画布上这两个节点之间是什么关系？">这两个节点是什么关系？</button>
+        </div>
+      </div>
       <div class="sb-input">
         <textarea id="chatInput" placeholder="问关于画布的问题，如「帮我概括当前图的结构」「N2 的内容讲了什么？」&#10;Enter 发送 · Shift+Enter 换行"></textarea>
         <div class="sb-actions">
           <label><input type="checkbox" id="includeImages" checked> 附带图片</label>
           <span class="grow"></span>
-          <button id="sendMsg">发送 ▶</button>
+          <button id="sendMsg"><i class="ic ic-send"></i>发送</button>
         </div>
       </div>
     </div>

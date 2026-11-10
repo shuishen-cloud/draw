@@ -114,6 +114,7 @@ export function addMsg(role, text, meta) {
   }
   box.appendChild(el);
   box.scrollTop = box.scrollHeight;
+  syncChatEmpty();     // 有消息了，收掉空态引导
   return el;
 }
 
@@ -177,6 +178,7 @@ export async function sendChat() {
   DBG.log('对话请求', { 节点数: Object.keys(state.nodes).length, 图片数: images.length });
 
   chat.busy = true;
+  syncChatEmpty();
   const btn = document.getElementById('sendMsg');
   btn.disabled = true;
   const bubble = addMsg('assistant', '', '助手');
@@ -230,6 +232,7 @@ export function bindSidebar() {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendChat(); }
   });
   document.getElementById('clearChat').addEventListener('click', clearChat);
+  bindChatEmpty();
   document.getElementById('toggleSidebar').addEventListener('click', () => {
     const el = document.getElementById('sidebar');
     el.classList.toggle('collapsed');
@@ -244,8 +247,32 @@ export function bindSidebar() {
 export function clearChat() {
   chat.messages = [];
   const box = document.getElementById('msgs');
-  if (box) box.innerHTML = '';
+  // 只删气泡，保留空态容器（#chatEmpty 也住在 #msgs 里）
+  box?.querySelectorAll('.msg').forEach(el => el.remove());
+  syncChatEmpty();
   DBG.log('对话已清空');
+}
+
+// 对话空态：没有消息时显示示例问句（只填入输入框，不自动发送）
+export function syncChatEmpty() {
+  const box = document.getElementById('chatEmpty');
+  if (!box) return;
+  const empty = document.querySelectorAll('#msgs .msg').length === 0;
+  box.hidden = !empty;
+}
+
+export function bindChatEmpty() {
+  const box = document.getElementById('chatEmpty');
+  if (!box) return;
+  box.addEventListener('click', (e) => {
+    const chip = e.target.closest('[data-fill]');
+    if (!chip) return;
+    const ta = document.getElementById('chatInput');
+    ta.value = chip.dataset.fill;
+    ta.focus();
+    DBG.log('填充示例问句：', chip.dataset.fill);
+  });
+  syncChatEmpty();
 }
 
 // =========================================================================

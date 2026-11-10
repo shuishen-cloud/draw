@@ -85,3 +85,21 @@ export function flashToast(msg) {
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => el.classList.remove('show'), 1600);
 }
+
+// 画布空态引导：state.nodes 为空时显示 #emptyHint。
+// 放在 state.js 而不是 main.js：createNode/removeNode/clearCanvas/导入
+// 多处都要触发，通过 HOST.syncEmptyHint() 调用，避免各模块互相 import 成环。
+// 可见性用 [hidden] + .show 双轨：hidden 兼底（无 JS/无障碍），
+// .show 只负责过渡动画（它的样式必须让位于 [hidden]，见 styles.css）。
+export function syncEmptyHint() {
+  const el = typeof document !== 'undefined' && document.getElementById('emptyHint');
+  if (!el) return;
+  const empty = Object.keys(state.nodes).length === 0;
+  el.hidden = !empty;
+  el.classList.toggle('show', empty);
+}
+
+if (typeof window !== 'undefined') {
+  window.syncEmptyHint = syncEmptyHint;
+  HOST.syncEmptyHint = syncEmptyHint;
+}
