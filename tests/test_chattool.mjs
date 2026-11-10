@@ -10,7 +10,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  CHATTOOL_DRAW_URL, KINDS, ORIGIN_SOURCE,
+  CHATTOOL_DRAW_URL, CHATTOOL_PREFIX, resolveChatToolUrl, LOCAL_CHATTOOL_DRAW_URL,
+  KINDS, ORIGIN_SOURCE,
   normalizeChatToolPayload, mapCardsToNodes, dedupeByMessageId, planLayout,
   toFavoriteItems,
 } from '../js/chattool.js';
@@ -54,8 +55,51 @@ function cardPayload() {
 }
 
 // ---------------------------------------------------------------- 常量
-test('CHATTOOL_DRAW_URL 指向本机 8765 的收藏导出接口', () => {
-  assert.match(CHATTOOL_DRAW_URL, /^http:\/\/127\.0\.0\.1:8765\/api\/favorites\/draw$/);
+test('CHATTOOL_DRAW_URL 在 node（无 location）下回退到本机 8765', () => {
+  // node --test 里没有 location，等价于 file:// 离线形态
+  assert.equal(CHATTOOL_DRAW_URL, 'http://127.0.0.1:8765/api/favorites/draw');
+  assert.equal(LOCAL_CHATTOOL_DRAW_URL, 'http://127.0.0.1:8765/api/favorites/draw');
+});
+
+// ---------------------------------------------------------------- 地址推导
+// 锁定 doc/feat/chattool-url-origin.md §2.4 的判定矩阵。
+// 127.0.0.1 的语义是「打开页面的这台设备自己」，不是「ChatTool 所在机器」。
+// 服务器部署后若还连 127.0.0.1，电脑连自己、手机连手机，请求根本到不了服务器。
+test('resolveChatToolUrl：服务器域名 → 同源 /8000 路径', () => {
+  assert.equal(
+    resolveChatToolUrl({ protocol: 'https:', origin: 'https://ex.com', hostname: 'ex.com' }),
+    'https://ex.com/8000/api/favorites/draw');
+  // 带端口的外网地址也应按 origin 走
+  assert.equal(
+    resolveChatToolUrl({ protocol: 'http:', origin: 'http://1.2.3.4:8080', hostname: '1.2.3.4' }),
+    'http://1.2.3.4:8080/8000/api/favorites/draw');
+});
+
+test('resolveChatToolUrl：localhost / 127.0.0.1 / ::1 → 回退本机 8765', () => {
+  for (const hostname of ['localhost', '127.0.0.1', '::1']) {
+    assert.equal(
+      resolveChatToolUrl({ protocol: 'http:', origin: 'http://' + hostname + ':8090', hostname }),
+      'http://127.0.0.1:8765/api/favorites/draw',
+      '本机开发不应去连 :8090/8000（server.js 没这条路由）');
+  }
+});
+
+test('resolveChatToolUrl：file:// 与缺失 location → 回退本机 8765', () => {
+  assert.equal(resolveChatToolUrl({ protocol: 'file:', origin: 'null', hostname: '' }),
+               'http://127.0.0.1:8765/api/favorites/draw');
+  assert.equal(resolveChatToolUrl(null), 'http://127.0.0.1:8765/api/favorites/draw');
+  assert.equal(resolveChatToolUrl(undefined), 'http://127.0.0.1:8765/api/favorites/draw');
+});
+
+test('resolveChatToolUrl：origin 缺失时不死循环地拼出 undefined', () => {
+  // 防御：protocol 是 http: 但 origin 为空（部分奇葩环境）→ 应回退本机而不是拼 "undefined/8000"
+  assert.equal(resolveChatToolUrl({ protocol: 'http:', origin: '', hostname: 'ex.com' }),
+               'http://127.0.0.1:8765/api/favorites/draw');
+});
+
+test('CHATTOOL_PREFIX 与 ChatTool 部署前缀一致', () => {
+  // 跨仓库约定：ChatTools 侧 CHATTOOL_PREFIX=/8000（见 deploy-8000.md）
+  assert.equal(CHATTOOL_PREFIX, '/8000');
 });
 
 test('KINDS 是画布支持的节点类型白名单', () => {
@@ -269,4 +313,21 @@ test('toFavoriteItems：无 origin 的卡片也能转成收藏（messageId 为�
 
 test('toFavoriteItems：空输入返回空数组', () => {
   assert.deepEqual(toFavoriteItems([]), []);
+});
+
+// ---------------------------------------------------------------- 凭据
+test('importFromChatTool 的 fetch 带 credentials:include（服务器 Basic Auth）', async () => {
+  // 静态断言：这是运行时行为，跑真实请求需要 ChatTool 在线，故检查源码意图。
+  // 理由：ChatTool 部署在 Nginx Basic Auth 之后，省略凭据会直接 401；
+  //       同源时 include 与默认的 same-origin 等价，代价为 0。
+  const fs = await import('node:fs');
+  const src = fs.readFileSync(new URL('../js/favorites.js', import.meta.url), 'utf8');
+  const fnStart = src.indexOf('export async function importFromChatTool');
+  assert.ok(fnStart > 0, '找不到 importFromChatTool');
+  // 取到函数结束（下一个顶层 export 之前）
+  const rest = src.slice(fnStart + 10);
+  const nextExport = rest.indexOf('\nexport ');
+  const body = nextExport > 0 ? rest.slice(0, nextExport) : rest;
+  assert.match(body, /credentials:\s*['"]include['"]/,
+    'importFromChatTool 的 fetch 必须带 credentials:include');
 });
