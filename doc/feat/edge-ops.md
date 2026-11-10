@@ -87,3 +87,57 @@
 - 连线「拖到中途松手即插入」的拖拽手势（需区分「连线到节点」与「插到线上」，容易误触，先用菜单/按钮）。
 - 多选批量删除（依赖尚未实现的多选）。
 - 自动重排布局（插入后位置固定在中点，不做避让）。
+
+---
+
+## 6. 实现与校验结果
+
+### 6.1 落地清单
+
+| 文件 | 改动 |
+|---|---|
+| `js/edgeops.js`（新增） | `planInsertOnEdge(src,dst,edge,opts)` 纯逻辑：中点坐标、命令归属上游、区域继承、`valid` 判定；`canRemoveEdge` |
+| `js/edges.js` | `insertNodeOnEdge` / `removeEdgeSilent` / `#edgeMenu` 右键菜单（挂 body，规避 `#canvasWrap` 裁剪）/ 标签上的 `＋插入` `×删除` |
+| `js/nodes.js` | 顶层注入 `HOST.createNode/removeEdge/selectNode`，让依赖保持单向 |
+| `js/shortcuts.js` | 新增 `Alt+Enter`（运行）、`Insert`（插入节点）；修正修饰键判断顺序 |
+| `js/run.js` | 删除顶层重复的 `Alt+Enter` / `Delete` 监听 |
+| `index.html` | 工具栏重排为「新建 / 导入 / 画布 / 运行」四段，去掉「拖我移动」 |
+| `styles.css` | 工具栏 264px、头部 34px、3 列紧凑网格（按钮 30px）；悬浮球与面板错开（`bottom:74px`）；`#edgeMenu`；标签小按钮 |
+| `build.js` | `edgeops.js` 加入 ORDER（edges.js 之前） |
+| `tests/test_edgeops.mjs`（新增） | 11 项纯逻辑单测 |
+
+### 6.2 校验结果
+
+- `node --test tests/test_edgeops.mjs`：**11 通过 / 0 失败**
+- 全量纯逻辑单测（edgeops + geom + zone + md + chattool）：**81 通过 / 0 失败**
+- `node build.js`：构建通过，模块缺失检查通过
+- 接线实测（最小 DOM stub 跑真实模块）：
+  ```
+  初始: 2 节点, 1 连线
+  插入后连线: n1->n3(总结) , n3->n2(空)
+  原连线已删: true
+  removeEdgeSilent: true  对不存在 id: false
+  ```
+- `tests/e2e_edge_ops.cjs`：已写（34 项），**因本机 Playwright 浏览器二进制缺失未执行**，
+  需在有浏览器的环境补跑：`node build.js && node tests/e2e_edge_ops.cjs`
+
+### 6.3 过程中的两个坑
+
+1. **edges ↔ nodes 双向依赖**：直接 `import { createNode } from './nodes.js'` 能跑（函数提升），
+   但单文件构建按 ORDER 拼接 + 将来顶层副作用会出问题。改为 `nodes.js` 顶层挂 `HOST`，`edges.js` 经 `HOST` 调用。
+2. **`Alt+Enter` 被吞**：`if (mod || e.altKey) return;` 写在 `Alt+Enter` 判断之前。
+   规律：含修饰键的快捷键必须在「通用放行」之前判断。
+
+### 6.4 使用方式
+
+| 操作 | 路径 |
+|---|---|
+| 删除连线 | 右键连线 → 删除 / 选中后标签上 `×` / 选中按 `Delete` |
+| 插入节点 | 右键连线 → 在中间插入节点 / 选中后标签上 `＋` / 选中按 `Insert` |
+| 收起工具栏 | 点 `×` 或悬浮球；悬浮球常驻左下，随时再开 |
+
+### 6.5 已知限制
+
+- 未实现「拖线到连线中间松手即插入」的手势（易与「连到节点」误触），先用菜单/按钮。
+- 插入节点固定为 `doc` 类型，创建后自动进入重命名态。
+- 浮窗可互相遮挡，拖动或点头部会把它提到最前；不做自动避让。
