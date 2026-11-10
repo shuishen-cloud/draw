@@ -130,3 +130,81 @@ FavoriteItem {
 
 - 拉取到收藏库不自动同步：ChatTool 里取消收藏后，收藏库里的条目仍在（需手动删）。
 - 收藏库是 localStorage 降级路径时，卡片正文过大可能触顶（与既有 node 收藏一致）。
+
+## 实现与校验结果
+
+### 落地清单
+
+| 文件 | 改动 |
+|---|---|
+| `js/chattool.js` | 新增 `favoriteIdOf()`（由 messageId/内容派生**稳定 id**）、`toFavoriteItems()`（描述 → 收藏条目） |
+| `js/favorites.js` | 新增 `pullChatToolToFavorites` / `listChatToolFavorites` / `clearChatToolFavorites` / `importAllChatToolFavorites`；`importFromChatTool` 改为入收藏库；`listFavoriteNodes` 放开 `chattool` 类型；列表与预览支持 chattool；`restoreNode` 透传 `origin` |
+| `js/main.js` | 顶层 `HOST.closeDrawerOthers()`（窄屏抽屉互斥）；`#olClose` 绑定；`#toggleOutline` 打开时触发互斥 |
+| `js/chat.js` | `#toggleSidebar` 同样触发互斥；import `HOST` |
+| `index.html` | 收藏面板「⬇ 全部导入」按钮；侧栏头部抽屉 ✕（`#olClose` / `#sbClose`） |
+| `styles.css` | 窄屏：展开时外部 toggle 让位、抽屉 ✕ 显示、`#sbClose` 提到 `z-index:61` 浮于收藏面板之上 |
+
+### 使用方式
+
+1. `cd ../ChatTools && .venv/bin/python -m app`（8765）
+2. `node server.js` → 打开 **http://localhost:8090**
+3. 侧栏「⭐ 收藏」→「📥 从 ChatTool 拉取」→ 卡片进入**左侧收藏列表**（画布不变）
+4. 列表里点某条 → 预览 →「⬇ 导入到画布」；或直接点「⬇ 全部导入」
+
+窄屏（≤1024px）下两侧栏是抽屉：展开一个自动收起另一个，用头部「✕」关闭。
+
+### 校验结果
+
+```
+tests/test_chattool.mjs          25 pass / 0 fail    （+6：toFavoriteItems）
+tests/test_geom.mjs              12 pass / 0 fail
+tests/test_md.mjs                21 pass / 0 fail
+tests/test_zone.mjs              12 pass / 0 fail
+tests/e2e_chattool_append.cjs    32 通过 / 0 失败    （+[8][9][10]：收件箱链路）
+tests/e2e_toggle_zindex.cjs      69 通过 / 0 失败    （新增，4 种宽度）
+tests/e2e_canvases_logic.cjs     37 通过 / 0 失败
+tests/e2e_favorites_node.cjs     41 通过 / 0 失败
+tests/e2e_favorite_subgraph.cjs  45 通过 / 0 失败
+tests/e2e_multi_canvas.cjs       28 通过 / 0 失败
+```
+
+真实端到端（ChatTools 8765 + draw 8090，两条收藏消息，900×700 视口走真实 UI 点击）：
+
+```
+拉取前画布 2 节点
+拉取      → 「✅ 已收进收藏 2 条…」 画布仍 2 节点，列表出现 2 行（含《会话名》· 角色 · 标签）
+重复拉取  → 「已是最新，2 条都在收藏里」
+全部导入  → 「✅ 已导入 2 张卡片到画布」，画布 4 节点，origin.messageId 正确
+重复导入  → 「已在画布上，跳过 2 张」，仍 4 节点
+窄屏 ✕    → collapsed: true
+浏览器错误 → 无
+```
+
+### 侧栏收起按钮：三次迭代才收敛的坑
+
+这个问题比预想的难，记下来避免重犯：
+
+| 尝试 | 做法 | 失败原因 |
+|---|---|---|
+| ① 原状 | `#toggleOutline` `z-index:31`，侧栏浮层 `z-index:50` | 按钮位置恰在侧栏头部，**被盖住**，`elementFromPoint` 命中 `.ol-tab` → 展开后收不回 |
+| ② 提层级 | 提到 `z-index:51` | 反过来**盖住侧栏内容**，「⭐ 收藏」「清空」点不到 |
+| ③ 随动平移 | `transform: translateX(侧栏宽)` | 900px 可用；**420px 下两按钮自己重叠**（侧栏 78vw） |
+| ④ **最终** | 承认窄屏侧栏是**抽屉**：展开时外部 toggle 用 `:has()` 隐藏，由侧栏内「✕」收起；两抽屉**互斥** | — |
+
+关键认知：窄屏下两侧栏各占 `78vw`，同时展开 = `156vw`，**必然互相遮挡**。
+所以互斥不是凑合，而是这个布局下唯一自洽的交互。
+
+补充一个连带的坑：收藏面板 `#favPanel` 是 `inset:0; z-index:60`，会盖住侧栏头部的 ✕。
+把 `#sbClose` 提到 `z-index:61` 并绝对定位到侧栏右上角，保证「面板打开时仍能收起整个侧栏」。
+
+### 测试方法论教训
+
+`elementFromPoint` 断言必须**等 CSS transition 结束**。侧栏切换是 `transform .22s`，
+class 同步切换但元素还在滑动，此时取中心点常落在视口外，返回 `none` —— 看起来像
+「z-index 没生效」，实际是探针时机错了。`waitCollapsed()` 里加了 `waitForTimeout(260)`。
+
+### 与上一版的关系
+
+- `appendCanvasData`（`chattool-cards`）**保留**：「全部导入」仍走它，它自带的
+  「与画布节点按 messageId 去重」正好防重复。
+- 默认入口语义变了：点「拉取」不再直接画到画布，而是**进收藏列表**。
