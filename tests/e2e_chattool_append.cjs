@@ -181,6 +181,66 @@ const PAYLOAD_SRC = `
   check('节点仍追加成功', r6.nodes === 2 && r6.res.added === 2, JSON.stringify(r6.res));
   check('无脏边残留', r6.edges === 0, String(r6.edges));
 
+  // ---- [8] 拉取进收藏库：画布不动，列表增加（chattool-inbox）----
+  console.log('\n[8] 拉取入收藏库：画布保持不变、收藏库增加、去重');
+  const r8 = await run(async () => {
+    clearCanvas();
+    createNode('doc', { x: 60, y: 60, title: '原有卡片' });
+    await clearChatToolFavorites();            // 排除历次运行残留
+    const before = Object.keys(state.nodes).length;
+
+    // 模拟 ChatTool 返回（不真起服务，直接注入 payload）
+    const res1 = await pullChatToolToFavorites(null, __ctPayload());
+    const afterNodes = Object.keys(state.nodes).length;
+    const inbox1 = (await listChatToolFavorites()).length;
+
+    const res2 = await pullChatToolToFavorites(null, __ctPayload());   // 重复
+    const inbox2 = (await listChatToolFavorites()).length;
+
+    const items = await listChatToolFavorites();
+    return {
+      before, afterNodes, res1, res2, inbox1, inbox2,
+      kinds: [...new Set(items.map(i => i.kind))],
+      names: items.map(i => i.name).sort(),
+      ids: items.map(i => i.meta.messageId).sort(),
+      keepsOrigin: items.every(i => i.data && i.data.origin),
+    };
+  });
+  check('拉取不改变画布节点数', r8.afterNodes === r8.before, `${r8.before} -> ${r8.afterNodes}`);
+  check('收藏库新增 2 条', r8.inbox1 === 2, String(r8.inbox1));
+  check('重复拉取不增加收藏', r8.inbox2 === 2, String(r8.inbox2));
+  check('重复拉取 reported skipped=2', r8.res2.added === 0 && r8.res2.skipped === 2,
+    JSON.stringify(r8.res2));
+  check('条目 kind 为 chattool', JSON.stringify(r8.kinds) === '["chattool"]', JSON.stringify(r8.kinds));
+  check('条目保留 messageId', JSON.stringify(r8.ids) === '["m_1","m_2"]', JSON.stringify(r8.ids));
+  check('条目 data.origin 完整（供导入时去重）', r8.keepsOrigin === true);
+
+  // ---- [9] 从收藏库“全部导入”到画布 ----
+  console.log('\n[9] 全部导入：卡片落到画布，且带 origin');
+  const r9 = await run(async () => {
+    const before = Object.keys(state.nodes).length;
+    const res = await importAllChatToolFavorites();
+    const nodes = Object.values(state.nodes);
+    return {
+      before, after: nodes.length, res,
+      origIds: nodes.filter(n => n.origin).map(n => n.origin.messageId).sort(),
+      keptOriginal: nodes.some(n => n.title === '原有卡片'),
+    };
+  });
+  check('画布增加 2 张卡片', r9.after === r9.before + 2, `${r9.before} -> ${r9.after}`);
+  check('原有卡片未被清空', r9.keptOriginal === true);
+  check('卡片带 messageId', JSON.stringify(r9.origIds) === '["m_1","m_2"]',
+    JSON.stringify(r9.origIds));
+
+  // ---- [10] 再导入一次不重复 ----
+  console.log('\n[10] 重复「全部导入」不会在画布上出现第二份');
+  const r10 = await run(async () => {
+    const before = Object.keys(state.nodes).length;
+    await importAllChatToolFavorites();
+    return { before, after: Object.keys(state.nodes).length };
+  });
+  check('节点数不变', r10.after === r10.before, `${r10.before} -> ${r10.after}`);
+
   // ---- [7] 网络失败提示（不真有服务，靠 Promise 拒绝分支）----
   console.log('\n[7] ChatTool 未启动时给出可操作提示');
   const r7 = await run(async () => {

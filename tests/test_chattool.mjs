@@ -12,6 +12,7 @@ import assert from 'node:assert/strict';
 import {
   CHATTOOL_DRAW_URL, KINDS, ORIGIN_SOURCE,
   normalizeChatToolPayload, mapCardsToNodes, dedupeByMessageId, planLayout,
+  toFavoriteItems,
 } from '../js/chattool.js';
 
 // ---- 构造一份 ChatTool 真实返回（GET /api/favorites/draw 实测形状）----
@@ -206,4 +207,66 @@ test('planLayout：多张新卡片之间互不重叠', () => {
 
 test('planLayout：空输入返回空数组', () => {
   assert.deepEqual(planLayout([], []), []);
+});
+
+// ---------------------------------------------------------------- 收藏条目
+// chattool-inbox：拉取不再直落画布，而是先入收藏库。
+// toFavoriteItems 负责把「待建节点描述」转成 FavoriteItem（kind='chattool'）。
+test('toFavoriteItems：kind 固定为 chattool，id 唯一且可重现', () => {
+  const descs = mapCardsToNodes(normalizeChatToolPayload(cardPayload()));
+  const items = toFavoriteItems(descs);
+  assert.equal(items.length, 2);
+  for (const it of items) {
+    assert.equal(it.kind, 'chattool');
+    assert.ok(it.id, 'id 不能为空');
+    assert.ok(it.createdAt, 'createdAt 不能为空');
+  }
+  assert.notEqual(items[0].id, items[1].id, '两条收藏 id 不能相同');
+});
+
+test('toFavoriteItems：id 由 messageId 派生，同一 messageId 恒得同一 id', () => {
+  const mk = () => toFavoriteItems(mapCardsToNodes(normalizeChatToolPayload(cardPayload())));
+  const a = mk(), b = mk();
+  assert.deepEqual(a.map(x => x.id), b.map(x => x.id),
+    '同输入必须产出同 id，否则收藏库去重会失效');
+});
+
+test('toFavoriteItems：name 优先用节点标题，meta 字段齐全', () => {
+  const items = toFavoriteItems(mapCardsToNodes(normalizeChatToolPayload(cardPayload())));
+  assert.equal(items[0].name, '会话A · 片段一');
+  assert.equal(items[0].meta.convTitle, '会话A');
+  assert.equal(items[0].meta.role, 'user');
+  assert.deepEqual(items[0].meta.tags, ['论文', '本周复盘']);
+  assert.equal(items[0].meta.messageId, 'm_1');
+  assert.equal(items[0].meta.favoriteAt, '2025-11-01T10:00:00');
+});
+
+test('toFavoriteItems：data 形状可直接喂给 restoreNode（含 origin）', () => {
+  const items = toFavoriteItems(mapCardsToNodes(normalizeChatToolPayload(cardPayload())));
+  const d = items[0].data;
+  for (const k of ['kind', 'title', 'text', 'src', 'prompt', 'w', 'h']) {
+    assert.ok(k in d, `data 缺字段 ${k}`);
+  }
+  assert.deepEqual(d.origin, {
+    source: ORIGIN_SOURCE,
+    messageId: 'm_1',
+    convId: 'c_1',
+    convTitle: '会话A',
+    role: 'user',
+    tags: ['论文', '本周复盘'],
+    favoriteAt: '2025-11-01T10:00:00',
+  });
+});
+
+test('toFavoriteItems：无 origin 的卡片也能转成收藏（messageId 为空）', () => {
+  const raw = cardPayload();
+  raw.draw_cards = [];
+  const items = toFavoriteItems(mapCardsToNodes(normalizeChatToolPayload(raw)));
+  assert.equal(items.length, 2);
+  assert.equal(items[0].meta.messageId, '');
+  assert.equal(items[0].data.origin, null);
+});
+
+test('toFavoriteItems：空输入返回空数组', () => {
+  assert.deepEqual(toFavoriteItems([]), []);
 });
