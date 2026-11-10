@@ -62,8 +62,9 @@ const clearPrefs = `
   const errs = [];
   page.on('pageerror', e => errs.push(e.message));
   page.on('console', m => { if (m.type() === 'error') errs.push(m.text()); });
-  await page.addInitScript(clearPrefs);
   await page.goto('file://' + HTML);
+  await page.evaluate(clearPrefs);   // 只清一次：后续 reload 要验证持久化
+  await page.reload();
   await page.waitForTimeout(500);
 
   console.log('\n[1] 页面加载');
@@ -99,8 +100,9 @@ const clearPrefs = `
     return { x: r.left, y: r.top };
   });
   const hb = await page.evaluate(() => {
-    const r = document.querySelector('#outline .ol-tabs').getBoundingClientRect();
-    return { x: r.left + r.width / 2 - 20, y: r.top + r.height / 2 };
+    // 用 Tab 自身作为把手：Tab 的 click 只在没有拖动时才会切换视图
+    const ol = document.querySelector('#outline .ol-tabs').getBoundingClientRect();
+    return { x: ol.left + ol.width / 3, y: ol.top + ol.height / 2 };
   });
   await page.mouse.move(hb.x, hb.y);
   await page.mouse.down();
@@ -212,7 +214,6 @@ const clearPrefs = `
   const np = await narrowCtx.newPage();
   const nerrs = [];
   np.on('pageerror', e => nerrs.push(e.message));
-  await np.addInitScript(clearPrefs);
   await np.goto('file://' + HTML);
   await np.waitForTimeout(500);
   const narrow = await np.evaluate(() => {

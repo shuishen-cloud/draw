@@ -178,7 +178,9 @@ const SPY = `
 
   console.log('\n[7] 工具栏按钮可直接点击（不再被遮挡）');
   const toolbarHit = await page.evaluate(() => {
-    const ids = ['reset1', 'fit', 'zoomIn', 'zoomOut', 'saveCanvas'];
+    // 视图控件（#viewctl）在画布右上，浮窗（大纲/对话/工具栏）也在画布上，
+    // 这里要验的是「视图控件没被浮窗盖住」。
+    const ids = ['reset1', 'fit', 'zoomIn', 'zoomOut'];
     const blocked = [];
     const vw = window.innerWidth, vh = window.innerHeight;
     for (const id of ids) {

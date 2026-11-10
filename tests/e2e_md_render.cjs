@@ -77,6 +77,8 @@ const MD = [
   page.on('console', m => { if (m.type() === 'error') errs.push(m.text()); });
   await page.goto('file://' + HTML);
   await page.waitForTimeout(400);
+  // 浮窗（大纲/对话/工具栏）会盖住左上角画布，几何类断言前先收起
+  await page.evaluate(() => HOST.hideFloatingPanels?.());
 
   console.log('\n[1] 页面加载');
   check('无 JS 异常', errs.length === 0, errs.join(' | '));

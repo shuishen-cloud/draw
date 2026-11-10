@@ -59,8 +59,23 @@ function check(name, cond, extra = '') {
   page.on('pageerror', e => errs.push(e.message));
   page.on('console', m => { if (m.type() === 'error') errs.push(m.text()); });
 
+  // 先清掉上一次运行留下的浮窗位置偏好（否则工具栏可能停在屏幕外）
+  await page.addInitScript(() => {
+    try { localStorage.removeItem('mc.floating'); localStorage.removeItem('mc.toolbarCollapsed'); } catch {}
+  });
   await page.goto('file://' + HTML);
   await page.waitForTimeout(400);
+
+  // 工具栏现在是可折叠悬浮面板：先确保展开且没被大纲/对话浮窗盖住，
+  // 否则里面的按钮点不到（浮窗默认停在左上/右上，工具栏在左下）。
+  const openToolbar = async () => {
+    const folded = await page.evaluate(() =>
+      document.getElementById('toolbar').classList.contains('folded'));
+    if (folded) await page.click('#toolbarFab');
+    await page.evaluate(() => document.getElementById('outline')?.classList.add('collapsed'));
+    await page.waitForTimeout(120);
+  };
+  await openToolbar();
 
   console.log('\n[1] 初始状态');
   check('无 JS 异常', errs.length === 0, errs.join(' | '));
@@ -78,6 +93,7 @@ function check(name, cond, extra = '') {
   check('有 activeCanvasId', !!init.active, init.active);
   check('首屏有示例节点（说明画布已载入）', init.nodes > 0, 'nodes=' + init.nodes);
 
+
   console.log('\n[2] 新建画布 → 空画布，旧图落盘');
   await page.evaluate(() => {
     window.__firstId = activeCanvasId();
@@ -85,6 +101,7 @@ function check(name, cond, extra = '') {
   });
   // 走真实 UI：点「🗂 画布」→「＋ 新建画布」，prompt 用对话框拦截
   page.once('dialog', d => d.accept('第二张'));
+  await openToolbar();
   await page.click('#canvasMenu');
   await page.click('#cpNew');
   await page.waitForTimeout(200);
@@ -109,6 +126,7 @@ function check(name, cond, extra = '') {
 
   console.log('\n[4] 重命名并刷新页面');
   page.once('dialog', d => d.accept('方案A'));
+  await openToolbar();
   await page.click('#canvasMenu');
   await page.click('#cpRename');
   await page.waitForTimeout(200);
@@ -136,6 +154,7 @@ function check(name, cond, extra = '') {
 
   console.log('\n[5] 删除当前画布 → 自动回落');
   page.once('dialog', d => d.accept());
+  await openToolbar();
   await page.click('#canvasMenu');
   await page.click('#cpDelete');
   await page.waitForTimeout(200);
@@ -155,10 +174,12 @@ function check(name, cond, extra = '') {
   check('剩余至少一张', afterRemove.list >= 1, 'list=' + afterRemove.list);
 
   console.log('\n[6] 面板交互：点外部 / Esc 关闭');
+  await openToolbar();
   await page.click('#canvasMenu');
   const p1 = await page.evaluate(() => document.getElementById('canvasPanel').classList.contains('show'));
   await page.mouse.click(5, 5);
   const p2 = await page.evaluate(() => document.getElementById('canvasPanel').classList.contains('show'));
+  await openToolbar();
   await page.click('#canvasMenu');
   await page.keyboard.press('Escape');
   const p3 = await page.evaluate(() => document.getElementById('canvasPanel').classList.contains('show'));
@@ -188,6 +209,7 @@ function check(name, cond, extra = '') {
   console.log('\n[8] 窄屏：画布切换器在可视区内');
   await page.setViewportSize({ width: 390, height: 844 });
   await page.waitForTimeout(300);
+  await openToolbar();
   const narrow = await page.evaluate(() => {
     const r = document.getElementById('canvasPicker').getBoundingClientRect();
     const m = document.getElementById('canvasMenu').getBoundingClientRect();

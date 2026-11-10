@@ -75,6 +75,8 @@ const SIM_DRAG = `
   page.on('console', m => { if (m.type() === 'error') errs.push(m.text()); });
   await page.goto('file://' + HTML);
   await page.waitForTimeout(500);
+  // 浮窗（大纲/对话/工具栏）会盖住左上角画布，几何类断言前先收起
+  await page.evaluate(() => HOST.hideFloatingPanels?.());
   await page.addScriptTag({ content: SIM_DRAG });
 
   console.log('\n[1] 页面加载');
