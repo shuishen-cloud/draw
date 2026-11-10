@@ -589,13 +589,16 @@ export async function importFromChatTool(url = CHATTOOL_DRAW_URL) {
  * 第二个参数用于测试注入 payload（不传则按 payloadOrUrl 当作数据）。
  * 返回 {added, skipped}。
  */
-export async function pullChatToolToFavorites(payloadOrUrl, maybePayload) {
-  let raw = maybePayload;
-  if (raw === undefined) {
-    if (typeof payloadOrUrl === 'string') return importFromChatTool(payloadOrUrl);
-    raw = payloadOrUrl;
-  }
-
+/**
+ * 把 ChatTool 的返回体写入收藏库（不动画布）。
+ *
+ * 拆成两层：本函数只收**已取到的数据**，网络请求交给 importFromChatTool。
+ * 不要把 URL / payload 混在一个参数里做类型判断——测试里会写出
+ * pullChatToolToFavorites(null, payload) 这种看不懂的调用。
+ *
+ * 返回 {added, skipped}。
+ */
+export async function pullChatToolToFavorites(raw) {
   const payload = normalizeChatToolPayload(raw);         // 非法数据在这里抛错
   const descs = mapCardsToNodes(payload);
   const items = toFavoriteItems(descs);

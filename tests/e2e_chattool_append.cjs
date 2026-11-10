@@ -190,11 +190,11 @@ const PAYLOAD_SRC = `
     const before = Object.keys(state.nodes).length;
 
     // 模拟 ChatTool 返回（不真起服务，直接注入 payload）
-    const res1 = await pullChatToolToFavorites(null, __ctPayload());
+    const res1 = await pullChatToolToFavorites(__ctPayload());
     const afterNodes = Object.keys(state.nodes).length;
     const inbox1 = (await listChatToolFavorites()).length;
 
-    const res2 = await pullChatToolToFavorites(null, __ctPayload());   // 重复
+    const res2 = await pullChatToolToFavorites(__ctPayload());   // 重复
     const inbox2 = (await listChatToolFavorites()).length;
 
     const items = await listChatToolFavorites();
