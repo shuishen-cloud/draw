@@ -27,7 +27,7 @@ export const LOCAL_CHATTOOL_DRAW_URL = 'http://127.0.0.1:8765/api/favorites/draw
 
 // ChatTool 的部署子路径，与 ChatTools 仓库的 CHATTOOL_PREFIX 对应。
 // 抽成常量集中耦合：换路径只改这一行。
-export const CHATTOOL_PREFIX = '/8000';
+export const CHATTOOL_PREFIX = '/chat';
 
 const LOCAL_HOSTS = new Set(['localhost', '127.0.0.1', '::1', '[::1]']);
 

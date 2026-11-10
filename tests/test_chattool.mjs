@@ -65,14 +65,14 @@ test('CHATTOOL_DRAW_URL 在 node（无 location）下回退到本机 8765', () =
 // 锁定 doc/feat/chattool-url-origin.md §2.4 的判定矩阵。
 // 127.0.0.1 的语义是「打开页面的这台设备自己」，不是「ChatTool 所在机器」。
 // 服务器部署后若还连 127.0.0.1，电脑连自己、手机连手机，请求根本到不了服务器。
-test('resolveChatToolUrl：服务器域名 → 同源 /8000 路径', () => {
+test('resolveChatToolUrl：服务器域名 → 同源 /chat 路径', () => {
   assert.equal(
     resolveChatToolUrl({ protocol: 'https:', origin: 'https://ex.com', hostname: 'ex.com' }),
-    'https://ex.com/8000/api/favorites/draw');
+    'https://ex.com/chat/api/favorites/draw');
   // 带端口的外网地址也应按 origin 走
   assert.equal(
     resolveChatToolUrl({ protocol: 'http:', origin: 'http://1.2.3.4:8080', hostname: '1.2.3.4' }),
-    'http://1.2.3.4:8080/8000/api/favorites/draw');
+    'http://1.2.3.4:8080/chat/api/favorites/draw');
 });
 
 test('resolveChatToolUrl：localhost / 127.0.0.1 / ::1 → 回退本机 8765', () => {
@@ -80,7 +80,7 @@ test('resolveChatToolUrl：localhost / 127.0.0.1 / ::1 → 回退本机 8765', (
     assert.equal(
       resolveChatToolUrl({ protocol: 'http:', origin: 'http://' + hostname + ':8090', hostname }),
       'http://127.0.0.1:8765/api/favorites/draw',
-      '本机开发不应去连 :8090/8000（server.js 没这条路由）');
+      '本机开发不应去连 :8090/chat（server.js 没这条路由）');
   }
 });
 
@@ -92,14 +92,14 @@ test('resolveChatToolUrl：file:// 与缺失 location → 回退本机 8765', ()
 });
 
 test('resolveChatToolUrl：origin 缺失时不死循环地拼出 undefined', () => {
-  // 防御：protocol 是 http: 但 origin 为空（部分奇葩环境）→ 应回退本机而不是拼 "undefined/8000"
+  // 防御：protocol 是 http: 但 origin 为空（部分奇葩环境）→ 应回退本机而不是拼 "undefined/chat"
   assert.equal(resolveChatToolUrl({ protocol: 'http:', origin: '', hostname: 'ex.com' }),
                'http://127.0.0.1:8765/api/favorites/draw');
 });
 
 test('CHATTOOL_PREFIX 与 ChatTool 部署前缀一致', () => {
-  // 跨仓库约定：ChatTools 侧 CHATTOOL_PREFIX=/8000（见 deploy-8000.md）
-  assert.equal(CHATTOOL_PREFIX, '/8000');
+  // 跨仓库约定：ChatTools 侧 CHATTOOL_PREFIX=/chat
+  assert.equal(CHATTOOL_PREFIX, '/chat');
 });
 
 test('KINDS 是画布支持的节点类型白名单', () => {
