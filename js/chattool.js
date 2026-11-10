@@ -11,8 +11,48 @@
 // 真正建节点在 io2.js::appendCanvasData。
 // =========================================================================
 
-// ChatTool 默认地址（draw 跑 127.0.0.1:8090，ChatTool 跑 127.0.0.1:8765）
-export const CHATTOOL_DRAW_URL = 'http://127.0.0.1:8765/api/favorites/draw';
+// ChatTool 的收藏导出接口。
+//
+// 为什么不能写死 127.0.0.1：这个地址的语义是「**打开页面的这台设备自己**」，
+// 不是「ChatTool 所在的那台机器」。ChatTool 部署到服务器后：
+//   - 电脑打开 draw → 127.0.0.1 指向用户自己的电脑（没跑 ChatTool）→ 连接被拒
+//   - 手机打开 draw → 127.0.0.1 指向手机自己 → 必然失败
+// 请求根本没离开用户设备，而报错又会说「请确认 ChatTool 已启动」，把人带偏。
+// 故按 location 推断：
+//   服务器部署  → 同源 <origin>/8000/api/favorites/draw（走 Nginx，同源无 CORS）
+//   本机开发    → http://127.0.0.1:8765（与原来完全一致）
+//   file:// 单文件版 → 同上（与原来完全一致）
+
+export const LOCAL_CHATTOOL_DRAW_URL = 'http://127.0.0.1:8765/api/favorites/draw';
+
+// ChatTool 的部署子路径，与 ChatTools 仓库的 CHATTOOL_PREFIX 对应。
+// 抽成常量集中耦合：换路径只改这一行。
+export const CHATTOOL_PREFIX = '/8000';
+
+const LOCAL_HOSTS = new Set(['localhost', '127.0.0.1', '::1', '[::1]']);
+
+/**
+ * 根据 location 推导 ChatTool 收藏导出地址。
+ *
+ * loc 是 { protocol, origin, hostname } 形状（传 location 本身即可）。
+ * 抽出纯函数的理由：tests 在 node --test 下跑，根本没有 location；
+ * 注入后可以覆盖全部形态，无需 mock 全局。
+ */
+export function resolveChatToolUrl(loc) {
+  // 没有 location（node 测试）/ 非 http(s)（file:// 单文件版）→ 本机
+  if (!loc || (loc.protocol !== 'http:' && loc.protocol !== 'https:')) {
+    return LOCAL_CHATTOOL_DRAW_URL;
+  }
+  // 本机开发：draw 跑在 :8090，ChatTool 在 :8765。
+  // 这里必须回退到 8765 而不是同源 + /8000 —— server.js 没有那条路由。
+  if (!loc.hostname || LOCAL_HOSTS.has(loc.hostname)) return LOCAL_CHATTOOL_DRAW_URL;
+  // 部分环境 origin 为空 → 拼出来是 "undefined/8000/..."，不如回退
+  if (!loc.origin) return LOCAL_CHATTOOL_DRAW_URL;
+  return loc.origin + CHATTOOL_PREFIX + '/api/favorites/draw';
+}
+
+export const CHATTOOL_DRAW_URL = resolveChatToolUrl(
+  typeof location !== 'undefined' ? location : null);
 
 // 画布支持的节点类型；外部数据里的 kind 必须落在这个白名单内
 export const KINDS = ['doc', 'output', 'img', 'exec'];

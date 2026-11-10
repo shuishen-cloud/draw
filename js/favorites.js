@@ -571,7 +571,13 @@ function toast(msg) {
 export async function importFromChatTool(url = CHATTOOL_DRAW_URL) {
   let raw;
   try {
-    const res = await fetch(url, { method: 'GET', headers: { Accept: 'application/json' } });
+    // credentials:include —— ChatTool 部署在 Nginx Basic Auth 之后，
+    // 省略凭据会被直接 401。同源时它与默认的 same-origin 等价，代价为 0。
+    const res = await fetch(url, {
+      method: 'GET',
+      headers: { Accept: 'application/json' },
+      credentials: 'include',
+    });
     if (!res.ok) throw new Error(`ChatTool 返回 HTTP ${res.status}`);
     raw = await res.json();
   } catch (e) {
