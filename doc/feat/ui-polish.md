@@ -110,3 +110,50 @@
 - **多选 / 框选多节点**：需要引入 selection set 与批量拖拽，属于独立 feat。
 - **暗色主题**：token 已具备条件，但暗色需要逐组件校对（SVG 连线、缩略图、图片棋盘格），单独排期。
 - **全面替换所有裸色值**：只替换与本次改动相邻的部分，避免一个大 PR 里混入大量无语义 diff。
+
+---
+
+## 6. 实现与校验结果
+
+### 6.1 落地清单
+
+| 文件 | 改动 |
+|---|---|
+| `styles.css` | token 三层（brand/neutral/semantic + 阴影/圆角/时长）；`.ic` 图标系统（17 个 SVG mask）；`.tb-group/.tb-sep` 工具栏分组；`#emptyHint` 空态层；`#chatEmpty` chip；`.node::before` 选中竖条；`button:focus-visible`；`.edge-label.placeholder` 弱化 |
+| `index.html` | 工具栏/侧栏/Tab 图标全部改 `<i class="ic">`；工具栏重组为 5 组；新增 `#emptyHint`、`#chatEmpty`；`<title>` 改为产品名 |
+| `js/shortcuts.js`（新增） | `bindShortcuts()`：Delete/Backspace 删除、方向键微移（Shift ×10）、Esc 取消选中、Ctrl+0/Ctrl±、F 适应内容；入口统一 `inEditable()` 守卫 |
+| `js/state.js` | 新增 `syncEmptyHint()` 并挂到 `HOST`/`window`（供任意模块触发，避免 import 成环） |
+| `js/main.js` | `init` 里 `bindShortcuts()`、空态按钮绑定、首屏 `syncEmptyHint()`；删掉硬编码欢迎语，改由 `syncChatEmpty()` 呈现示例 chip |
+| `js/nodes.js` / `js/io2.js` | 节点增删、画布导入后同步空态；`clearCanvas` 只删 `.msg` 不整片清空 |
+| `js/chat.js` | `syncChatEmpty()` / `bindChatEmpty()`；点击 chip 只填充不发送；`addMsg` 后自动收起空态 |
+| `js/edges.js` | 空命令标签文案 `+ 命令` → `点击写命令` + `title` 提示双击编辑 |
+| `build.js` | `shortcuts.js` 加入 ORDER（在 main 之前） |
+| `tests/shot.cjs`（新增） | 三档视口 + 空态/选中态截图脚本，供后续 UI 改动做视觉回归 |
+
+### 6.2 校验结果
+
+- `tests/e2e_ui_polish.cjs`：**36 通过 / 0 失败**
+- 全量回归（16 个 e2e）：**全部 0 失败**（含 `e2e_multi_canvas` 因空态容器调整而修正的两处断言）
+
+### 6.3 过程中发现并修复的问题
+
+1. **分组破坏窄屏 sticky**：`#canvasPicker` 从 `#toolbar` 直接子元素变成 `.tb-group` 的子元素后，
+   窄屏 `order:-1` / `position:sticky` 全部失效，切换器被横向滚动挤出可视区。
+   修法：给包含切换器的组加 `#toolbar .tb-group:has(#canvasPicker){order:-1}`。
+2. **`clearCanvas` 误删空态容器**：`#chatEmpty` 住在 `#msgs` 里，而 `clearCanvas`
+   用 `msgs.innerHTML=''` 整片清空 → 首屏 `restoreCanvas()` 一执行空态容器就消失。
+   改为只 `remove()` `.msg` 气泡。
+3. **测试断言口径**：`#msgs.children.length` 会把空态容器算进「对话条数」，
+   改为 `querySelectorAll('#msgs .msg').length`。
+
+### 6.4 使用方式
+
+- 桌面：`Delete` 删选中、方向键微移、`Esc` 取消选中、`Ctrl/⌘+0` 回到 100%、`Ctrl/⌘±` 缩放、`F` 适应内容。
+- 空画布：中央引导卡片，只有「新建文档节点 / 导入文件」两个按钮吃指针事件，其余区域仍可拖动画布。
+- 无消息时：侧栏出现三条示例问句 chip，点击填入输入框（不自动发送，避免误耗额度）。
+
+### 6.5 已知限制
+
+- 单文件版在**极老浏览器**（不支持 `mask-image`）上图标不可见，但文字标签全部保留，功能不受影响。
+- `F` 快捷键在部分输入法组合键下可能被吞（中文输入法组字中），属预期行为。
+- 窄屏（≤1024px）隐藏 `.tb-sep`，分组间距由 gap 承担。
