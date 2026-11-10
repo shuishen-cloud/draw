@@ -100,7 +100,7 @@ const PAYLOAD_SRC = `
     clearCanvas();
     createNode('doc', { x: 60, y: 60, title: '我原来的卡片', text: '别删我' });
     const before = Object.keys(state.nodes).length;
-    const res = appendChatToolData(__ctPayload());
+    const res = appendCanvasData(__ctPayload());
     const nodes = Object.values(state.nodes);
     return {
       before, after: nodes.length, res,
@@ -139,7 +139,7 @@ const PAYLOAD_SRC = `
   console.log('\n[3] 再次追加同一份 → 全部跳过，节点数不变');
   const r3 = await run(() => {
     const before = Object.keys(state.nodes).length;
-    const res = appendChatToolData(__ctPayload());
+    const res = appendCanvasData(__ctPayload());
     return { before, after: Object.keys(state.nodes).length, res };
   });
   check('节点数不变', r3.after === r3.before, `${r3.before} -> ${r3.after}`);
@@ -150,7 +150,7 @@ const PAYLOAD_SRC = `
   const r4 = await run(() => {
     clearCanvas();
     view.x = -123; view.y = 45; view.scale = 1.5;
-    appendChatToolData(__ctPayload());
+    appendCanvasData(__ctPayload());
     return { x: view.x, y: view.y, scale: view.scale };
   });
   check('view.x 未变', r4.x === -123, String(r4.x));
@@ -163,7 +163,7 @@ const PAYLOAD_SRC = `
     clearCanvas();
     createNode('doc', { x: 0, y: 0, title: '保留我' });
     let msg = '';
-    try { appendChatToolData({ nodes: [] }); } catch (e) { msg = e.message; }
+    try { appendCanvasData({ nodes: [] }); } catch (e) { msg = e.message; }
     return { msg, count: Object.keys(state.nodes).length };
   });
   check('抛出明确错误', /不是有效的画布数据/.test(r5.msg), r5.msg);
@@ -175,7 +175,7 @@ const PAYLOAD_SRC = `
     clearCanvas();
     const p = __ctPayload();
     p.edges = [{ id: 'e1', source: 'n1', target: 'ghost', command: '' }];
-    const res = appendChatToolData(p);
+    const res = appendCanvasData(p);
     return { res, edges: Object.keys(state.edges).length, nodes: Object.keys(state.nodes).length };
   });
   check('节点仍追加成功', r6.nodes === 2 && r6.res.added === 2, JSON.stringify(r6.res));

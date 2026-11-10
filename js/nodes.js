@@ -26,6 +26,9 @@ export function createNode(kind, opts = {}) {
     prompt: opts.prompt ?? '',             // 执行节点的提示词（写在节点内）
     zoneId: opts.zoneId ?? null,           // 手动归属的区域
     level: opts.level ?? 1,                // 大纲层级（预留）
+    // 卡片来源（上层 ChatTool 传送时写入，见 chattool.js）。
+    // 用于溯源与「重复拉取去重」；本地新建节点为 null。
+    origin: opts.origin ?? null,
     el: null,
   };
   state.nodes[id] = node;

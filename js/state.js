@@ -64,6 +64,10 @@ if (typeof window !== 'undefined') {
   window.DBG = DBG;
   window.state = state;
   window.view = view;
+  // flashToast 也要暴露：其他模块用 HOST.flashToast?.() 发提示，
+  // 而 HOST 就是 window。不暴露的话 ESM（http）模式下一整类提示
+  // 会静默消失（只有单文件打包版因为共用作用域恰好能拿到）。
+  window.flashToast = flashToast;
 }
 
 // ---- 通用小工具 ----

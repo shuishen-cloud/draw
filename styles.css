@@ -648,6 +648,9 @@
   }
   .fav-bar .spacer { flex: 1; }
   .fav-bar button.ghost { padding: 2px 8px; font-size: 14px; }
+  /* 从 ChatTool 拉取：文字按钮，比 × 小一号以免挤压标题 */
+  #favPullChatTool { font-size: 12px !important; white-space: nowrap; }
+  #favPullChatTool:disabled { opacity: .55; cursor: default; }
   #favList {
     flex: 0 0 auto; max-height: 42%; overflow-y: auto;
     border-bottom: 1px solid #eceef1;

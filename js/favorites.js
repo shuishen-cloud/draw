@@ -16,6 +16,8 @@ import {
 } from './store.js';
 import { refreshOutline } from './outline.js';
 import { boundsOf, centerOffset, pickSubgraph } from './subgraph.js';
+import { appendCanvasData } from './io2.js';
+import { CHATTOOL_DRAW_URL } from './chattool.js';
 
 let favSeq = 0;
 
@@ -540,6 +542,27 @@ function toast(msg) {
   HOST.flashToast?.(msg);
 }
 
+// ---- 从上层 ChatTool 拉取收藏卡片（追加到当前画布）----
+// 与「⬇ 导入收藏」不同：这里是跨应用拉取，且**不清空**当前画布。
+// 失败时给出可操作退路：ChatTool 未启动 / 端口不同 / 纯离线版。
+export async function importFromChatTool(url = CHATTOOL_DRAW_URL) {
+  let raw;
+  try {
+    const res = await fetch(url, { method: 'GET', headers: { Accept: 'application/json' } });
+    if (!res.ok) throw new Error(`ChatTool 返回 HTTP ${res.status}`);
+    raw = await res.json();
+  } catch (e) {
+    DBG.err('拉取 ChatTool 失败：', e);
+    const hint = /Failed to fetch|NetworkError|load failed/i.test(String(e.message))
+      ? '连不上 ChatTool（' + url + '）。请确认 ChatTool 已启动，或改用 ChatTool 的「导出」再点「⬆ 导入」。'
+      : e.message;
+    throw new Error(hint);
+  }
+
+  const res = appendCanvasData(raw);        // 非法数据会在这里抛错
+  return res;
+}
+
 // 收藏当前选中节点：⭐ 按钮与面板按钮共用
 export async function favoriteSelectedNode() {
   const id = state.selectedNodeId;
@@ -575,6 +598,26 @@ export function bindFavorites() {
   });
 
   closeBtn?.addEventListener('click', closeFavoritesPanel);
+
+  // 从 ChatTool 拉取收藏卡片：追加到当前画布，不清空、不改视口
+  const pullBtn = el('favPullChatTool');
+  pullBtn?.addEventListener('click', async () => {
+    if (pullBtn.disabled) return;                 // 防连点重复拉
+    pullBtn.disabled = true;
+    const oldText = pullBtn.textContent;
+    pullBtn.textContent = '⏳ 拉取中…';
+    try {
+      const { added, skipped } = await importFromChatTool();
+      if (!added && !skipped) toast('ChatTool 里还没有收藏');
+      else toast(`✅ 新增 ${added} 张卡片` + (skipped ? `，跳过 ${skipped} 张（已存在）` : ''));
+    } catch (err) {
+      DBG.err('从 ChatTool 拉取失败：', err);
+      toast('❌ ' + err.message);
+    } finally {
+      pullBtn.disabled = false;
+      pullBtn.textContent = oldText;
+    }
+  });
 
   list?.addEventListener('click', async (e) => {
     const del = e.target.closest('[data-del]');

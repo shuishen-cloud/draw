@@ -32,6 +32,10 @@ const ORDER = [
   'chat.js',
   'io1.js',
   'io2.js',
+  // chattool.js 是纯逻辑（解包/映射/去重/排布），被 io2.js 的
+  // appendCanvasData 与 favorites.js 的 importFromChatTool 依赖，
+  // 单文件版里必须排在它们之前（否则运行时 ReferenceError）。
+  'chattool.js',
   // canvases.js 依赖 io2.js 的 export/import/clear，必须在 io2 之后、main 之前
   'canvases.js',
   // store.js 是 IndexedDB 薄封装（只依赖 state），favorites.js 依赖

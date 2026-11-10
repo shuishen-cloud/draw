@@ -7,6 +7,9 @@ import { refreshOutline } from './outline.js';
 import { createTask, refreshTasks } from './tasks.js';
 import { applyView } from './viewport.js';
 import { createZone, layoutZone } from './zones.js';
+import {
+  dedupeByMessageId, mapCardsToNodes, normalizeChatToolPayload, planLayout,
+} from './chattool.js';
 // 11.99 画布保存 / 导出 / 导入
 // =========================================================================
 // 把当前画布导出为纯数据对象（含图片 dataURL）
@@ -21,6 +24,8 @@ export function exportCanvasData() {
       x: n.x, y: n.y, w: n.w, h: n.h,
       text: n.text || '', src: n.src || '', prompt: n.prompt || '',
       zoneId: n.zoneId || null, level: n.level || 1,
+      // 来源元信息（ChatTool 卡片），有则带上，保证「保存→重开」后去重仍有效
+      ...(n.origin ? { origin: n.origin } : {}),
     })),
     edges: Object.values(state.edges).map(e => ({
       id: e.id, source: e.source, target: e.target, command: e.command || '',
@@ -61,6 +66,7 @@ export function importCanvasData(data) {
       title: n.title, x: n.x, y: n.y, w: n.w, h: n.h,
       text: n.text, src: n.src, prompt: n.prompt,
       zoneId: n.zoneId, level: n.level,
+      origin: n.origin || null,
     });
     // 保持原 id，保证连线引用一致
     const oldId = node.id;
@@ -100,6 +106,59 @@ export function importCanvasData(data) {
   } finally {
     HOST.__silentImport = false;
   }
+}
+
+// =========================================================================
+// 追加导入（上层 ChatTool 传送的收藏卡片）
+// =========================================================================
+// 与 importCanvasData 的根本区别：**不清空、不重置 seq、不动 view**。
+//  importCanvasData 是「打开一个画布文件」→ 整板替换；
+//  appendCanvasData   是「再放几张卡片上去」→ 只增不减。
+// 用整板替换的路径接卡片会把用户正在画的图抹掉（事故隐患）。
+//
+export function appendCanvasData(raw) {
+  const payload = normalizeChatToolPayload(raw);   // 非法数据在这里抛错
+  const descs = mapCardsToNodes(payload);
+
+  const existing = Object.values(state.nodes);
+  const { kept, skipped } = dedupeByMessageId(descs, existing);
+  const placed = planLayout(kept, existing);
+
+  // 建节点，并记下「外部节点 id -> 本地节点 id」供连边用。
+  // 不能靠下标对应：去重后 kept 已经短了一层，下标会对不上。
+  const extToLocal = new Map();
+  for (const d of placed) {
+    const node = createNode(d.kind, {
+      title: d.title, text: d.text, src: d.src, prompt: d.prompt,
+      x: d.x, y: d.y, w: d.w, h: d.h,
+      origin: d.origin,
+    });
+    if (d.srcId) extToLocal.set(String(d.srcId), node.id);
+  }
+
+  // 外部边：ChatTool 目前只发卡片不发边，但按通用规则处理——
+  // 端点必须在「本次新建」或「画布已有」里找得到，否则跳过（不造脏边）。
+  let skippedEdges = 0;
+  for (const e of payload.edges) {
+    const source = extToLocal.get(String(e.source));
+    const target = extToLocal.get(String(e.target));
+    if (!source || !target) { skippedEdges++; continue; }
+    const edge = addEdge(source, target);
+    edge.command = e.command || '';
+  }
+  if (skippedEdges) DBG.warn('追加导入：跳过', skippedEdges, '条端点缺失的边');
+
+  if (extToLocal.size) {
+    refreshAllZonePickers();
+    redrawEdges();
+    refreshOutline();
+    refreshSnapshot();
+    autosaveCanvas();
+  }
+
+  DBG.log('从 ChatTool 追加：', payload.nodes.length, '张卡片，新增',
+    extToLocal.size, '，跳过', skipped.length, '（已存在）');
+  return { added: extToLocal.size, skipped: skipped.length };
 }
 
 // 清空整个画布
