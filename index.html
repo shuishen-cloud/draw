@@ -12,31 +12,6 @@
 <body>
 
 <div id="stage">
-  <aside id="outline">
-    <div class="ol-tabs">
-      <span class="ol-tab active" data-tab="outline"><i class="ic ic-outline"></i>大纲</span>
-      <span class="ol-tab" data-tab="tasks"><i class="ic ic-task"></i>任务</span>
-      <!-- 窄屏抽屉模式下的收起入口：展开时外部 #toggleOutline 会隐藏，
-           没有这个按钮就没有任何路可以收回侧栏 -->
-      <button class="drawer-close" id="olClose" title="收起大纲栏">×</button>
-    </div>
-    <div class="ol-pane" id="paneOutline">
-      <div class="ol-head">
-        <span class="spacer"></span>
-        <button class="ghost small" id="addZone">＋ 区域</button>
-      </div>
-      <div id="levelFilter"></div>
-      <div class="ol-body" id="outlineBody"></div>
-    </div>
-    <div class="ol-pane" id="paneTasks" style="display:none">
-      <div class="ol-head">
-        <span class="spacer"></span>
-        <button class="ghost small" id="addTask">＋ 新建任务</button>
-      </div>
-      <div class="ol-body" id="taskBody"></div>
-    </div>
-  </aside>
-
   <div id="canvasWrap">
     <div id="toast"></div>
     <!-- 空画布引导：无节点时显示，只有一个按钮吃指针事件 -->
@@ -72,67 +47,100 @@
       <button id="reset1" title="100% 居中">1:1</button>
       <button id="toggleMap" title="显示/隐藏小地图">地图</button>
     </div>
+    <!-- 工具栏：悬浮面板，默认贴左下；头部可拖拽，× 收起（回到悬浮球） -->
     <div id="toolbar">
+      <div class="tb-head">
+        <span class="tb-title">工具</span>
+        <span class="tb-spacer"></span>
+        <button class="ghost icon-only tb-fold" id="toolbarFold" title="收起工具栏">×</button>
+      </div>
+      <div class="tb-body">
       <input id="apiKey" class="key" type="password" placeholder="DeepSeek API Key" autocomplete="off" />
-      <!-- 分组：新建 | 文件 | 画布/收藏 | 数据 | 运行（主操作在最后、实心强调） -->
-      <div class="tb-group">
-        <button class="ghost" id="addDoc"><i class="ic ic-doc"></i>文档</button>
-        <button class="ghost" id="addOutput"><i class="ic ic-out"></i>输出</button>
-        <button class="ghost" id="addImg"><i class="ic ic-img"></i>图片</button>
-        <button class="ghost" id="addExec"><i class="ic ic-run"></i>执行</button>
+      <!-- 分组：新建 | 导入 | 画布 | 数据 | 运行（紧凑图标网格，主操作独占一行） -->
+      <div class="tb-section">
+        <div class="tb-label">新建</div>
+        <div class="tb-group">
+          <button class="ghost" id="addDoc" title="新建文档节点"><i class="ic ic-doc"></i>文档</button>
+          <button class="ghost" id="addOutput" title="新建输出节点"><i class="ic ic-out"></i>输出</button>
+          <button class="ghost" id="addImg" title="新建图片节点"><i class="ic ic-img"></i>图片</button>
+          <button class="ghost" id="addExec" title="新建执行节点"><i class="ic ic-run"></i>执行</button>
+        </div>
       </div>
-      <span class="tb-sep"></span>
-      <div class="tb-group">
-        <button class="ghost" id="importFiles" title="导入本地文件为文档节点"><i class="ic ic-file"></i>文件</button>
-        <button class="ghost" id="importUrl" title="抓取网页正文为文档节点"><i class="ic ic-link"></i>链接</button>
-        <button class="ghost" id="saveCanvas" title="保存到本地"><i class="ic ic-save"></i>保存</button>
+      <div class="tb-section">
+        <div class="tb-label">导入</div>
+        <div class="tb-group">
+          <button class="ghost" id="importFiles" title="导入本地文件为文档节点"><i class="ic ic-file"></i>文件</button>
+          <button class="ghost" id="importUrl" title="抓取网页正文为文档节点"><i class="ic ic-link"></i>链接</button>
+          <button class="ghost" id="saveCanvas" title="保存到本地"><i class="ic ic-save"></i>保存</button>
+        </div>
       </div>
-      <span class="tb-sep"></span>
-      <div class="tb-group">
-        <!-- 多画布：选择器负责切换，菜单按钮负责管理（新建/重命名/复制/删除） -->
-        <select id="canvasPicker" title="切换画布"></select>
-        <button class="ghost icon-only" id="canvasMenu" title="画布管理"><i class="ic ic-stack"></i></button>
-        <button class="ghost icon-only" id="favSubgraph" title="框选一部分节点和连线收藏"><i class="ic ic-select"></i></button>
+      <div class="tb-section">
+        <div class="tb-label">画布</div>
+        <div class="tb-group">
+          <select id="canvasPicker" title="切换画布"></select>
+          <button class="ghost icon-only" id="canvasMenu" title="画布管理"><i class="ic ic-stack"></i></button>
+          <button class="ghost icon-only" id="favSubgraph" title="框选一部分节点和连线收藏"><i class="ic ic-select"></i></button>
+          <button class="ghost icon-only" id="exportJson" title="导出为 JSON 文件"><i class="ic ic-down"></i></button>
+          <button class="ghost icon-only" id="importJson" title="从 JSON 文件导入"><i class="ic ic-up"></i></button>
+        </div>
       </div>
-      <span class="tb-sep"></span>
-      <div class="tb-group">
-        <button class="ghost icon-only" id="exportJson" title="导出为 JSON 文件"><i class="ic ic-down"></i></button>
-        <button class="ghost icon-only" id="importJson" title="从 JSON 文件导入"><i class="ic ic-up"></i></button>
-      </div>
-      <span class="tb-sep"></span>
-      <div class="tb-group">
-        <button id="runSel"><i class="ic ic-play"></i>运行选中</button>
-        <button class="ghost" id="runAll">全部运行</button>
+      <div class="tb-section">
+        <div class="tb-group tb-run">
+          <button id="runSel" title="运行选中的连线或节点（Alt+Enter）"><i class="ic ic-play"></i>运行选中</button>
+          <button class="ghost" id="runAll" title="按拓扑顺序运行整张画布">全部运行</button>
+        </div>
       </div>
       <input type="file" id="filePicker" multiple style="display:none"
              accept=".txt,.md,.markdown,.csv,.json,.log,.js,.ts,.py,.html,.css,.xml,.yaml,.yml,image/*" />
       <input type="file" id="jsonPicker" accept=".json" style="display:none" />
       <span id="hint">
-        连出线：按住节点<b>任意边框</b>往外拖（或拖两侧圆点）· 落点：目标节点边上即可，不用对准圆点<br>
-        编辑命令：单击连线标签 · 执行：<kbd>Alt</kbd>+<kbd>Enter</kbd> · 平移：空白处拖拽 · 缩放：双指 / <kbd>Ctrl</kbd>滚轮
+        连线：拖节点边框 · 命令：单击线上标签 · 插节点：选中线按 <kbd>Insert</kbd>
       </span>
+      </div>
     </div>
+    <!-- 悬浮球：工具栏收起后的入口 -->
+    <button id="toolbarFab" title="打开工具栏（≡）" aria-label="打开工具栏"><i class="ic ic-tools"></i></button>
     <!-- 画布管理浮层：由 #canvasMenu 切换显示，位置在 JS 里贴着按钮算 -->
     <div id="canvasPanel" role="menu" aria-label="画布管理">
       <div class="cp-title">当前：<span id="cpCurrent">—</span></div>
       <button id="cpNew">＋ 新建画布</button>
       <button id="cpRename">✏ 重命名当前</button>
       <button id="cpDuplicate">⧉ 复制当前</button>
-      <button id="cpDelete" class="danger">🗑 删除当前</button>
+      <button id="cpDelete" class="danger">删除当前</button>
     </div>
-    <button id="toggleOutline" title="展开/折叠大纲栏"><i class="ic ic-outline"></i>大纲</button>
-    <button id="toggleSidebar" title="展开/折叠对话栏"><i class="ic ic-chat"></i>对话</button>
-  </div>
 
-  <aside id="sidebar">
+    <aside id="outline">
+    <div class="ol-tabs">
+      <span class="ol-tab active" data-tab="outline"><i class="ic ic-outline"></i>大纲</span>
+      <span class="ol-tab" data-tab="tasks"><i class="ic ic-task"></i>任务</span>
+      <!-- 折叠按钮：折叠后只剩这一行标题栏（浮窗可拖拽，不再挪出屏幕） -->
+      <button class="panel-fold" id="olClose" title="折叠/展开大纲">−</button>
+    </div>
+    <div class="ol-pane" id="paneOutline">
+      <div class="ol-head">
+        <span class="spacer"></span>
+        <button class="ghost small" id="addZone">＋ 区域</button>
+      </div>
+      <div id="levelFilter"></div>
+      <div class="ol-body" id="outlineBody"></div>
+    </div>
+    <div class="ol-pane" id="paneTasks" style="display:none">
+      <div class="ol-head">
+        <span class="spacer"></span>
+        <button class="ghost small" id="addTask">＋ 新建任务</button>
+      </div>
+      <div class="ol-body" id="taskBody"></div>
+    </div>
+  </aside>
+
+    <aside id="sidebar">
     <div class="sb-head">
       <span><i class="ic ic-chat"></i>对话</span>
       <span class="chip" id="ctxChip">上下文：0 节点</span>
       <span class="spacer"></span>
       <button class="ghost" id="clearChat" title="清空对话">清空</button>
       <button class="ghost" id="openFavorites" title="收藏（节点）"><i class="ic ic-star"></i>收藏</button>
-      <!-- 窄屏抽屉模式下的收起入口（同 #olClose） -->
-      <button class="drawer-close" id="sbClose" title="收起对话栏">✕</button>
+      <button class="panel-fold" id="sbClose" title="折叠/展开对话">−</button>
     </div>
     <!-- 收藏面板：查阅优先（只读预览），预览里的按钮才导入到画布 -->
     <div id="favPanel" hidden>
@@ -171,6 +179,7 @@
       </div>
     </div>
   </aside>
+  </div>
 </div>
 
 

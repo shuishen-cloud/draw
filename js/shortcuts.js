@@ -12,6 +12,8 @@ import { DBG, HOST, state, view } from './state.js';
 import { layoutNode, removeEdge, removeNode, selectNode } from './nodes.js';
 import { redrawEdges } from './edges.js';
 import { canvasEl, centerContent, fitToContent, zoomAt } from './viewport.js';
+import { insertNodeOnEdge } from './edges.js';
+import { runCurrentEdge } from './run.js';
 
 // 焦点在可编辑元素里时，快捷键必须让位（否则 Backspace 会删节点）
 function inEditable(target) {
@@ -82,8 +84,25 @@ export function bindShortcuts() {
       return;
     }
 
+    // ---- Alt+Enter：运行当前连线（原先绑在 run.js，已收敛到这里） ----
+    // 必须在「带修饰键一律放行」之前判断，否则会被 altKey 提前 return 掉
+    if (e.altKey && e.key === 'Enter') {
+      e.preventDefault();
+      runCurrentEdge();
+      DBG.log('快捷键', 'Alt+Enter 运行');
+      return;
+    }
+
     // 带修饰键的其余组合交给浏览器（Ctrl+C/V 等）
     if (mod || e.altKey) return;
+
+    // ---- Insert：在选中的连线中间插入节点 ----
+    if (e.key === 'Insert' && state.selectedEdgeId && state.edges[state.selectedEdgeId]) {
+      e.preventDefault();
+      insertNodeOnEdge(state.selectedEdgeId, 'doc');
+      DBG.log('快捷键', 'Insert 插入节点');
+      return;
+    }
 
     // ---- 取消选中 ----
     if (e.key === 'Escape') {

@@ -25,12 +25,16 @@ const ORDER = [
   'zones.js',
   'outline.js',
   'nodes.js',
+  // edgeops.js 是纯逻辑（插入节点的坐标/命令归属），edges.js 依赖它
+  'edgeops.js',
   'edges.js',
   'exec.js',
   'run.js',
   // shortcuts.js 只依赖 state/nodes/edges/viewport，且必须在 main.js 之前
   // （main 的 init 里要调用 bindShortcuts）。
   'shortcuts.js',
+  // floating.js 只管面板拖拽/折叠（依赖 state 的 DBG），必须在 main.js 之前
+  'floating.js',
   'tasks.js',
   'chat.js',
   'io1.js',

@@ -4,6 +4,8 @@ import { drawMiniMap } from './minimap.js';
 import { applyFilter } from './outline.js';
 import { toggleEdgeInTask } from './tasks.js';
 import { screenToWorld, worldEl } from './viewport.js';
+import { planInsertOnEdge } from './edgeops.js';
+
 import {
   anchorSide, edgeEndpoints, bezierPath, hitTest, nearestBorderPoint,
 } from './geom.js';
@@ -185,6 +187,11 @@ export function redrawEdges() {
       p.dataset.edge = edge.id;
       p.addEventListener('click', () => selectEdge(edge.id));
       p.addEventListener('dblclick', () => editEdgeLabel(edge));
+      p.addEventListener('contextmenu', (e) => {
+        e.preventDefault();
+        selectEdge(edge.id);
+        showEdgeMenu(edge.id, e.clientX, e.clientY);
+      });
       svg.appendChild(p);
       edge.pathEl = p;
     }
@@ -223,6 +230,126 @@ export function drawGhost(link) {
 }
 
 // =========================================================================
+// 7.5 连线操作：插入节点 / 删除 / 右键菜单
+// =========================================================================
+
+/**
+ * 在连线中间插入一个节点：A →(cmd) B  变成  A →(cmd) X →(空) B
+ * 几何与命令归属由 edgeops.planInsertOnEdge 计算（纯逻辑，有单测）。
+ * @returns {object|null} 新建的节点
+ */
+export function insertNodeOnEdge(edgeId, kind = 'doc') {
+  const edge = state.edges[edgeId];
+  if (!edge) {
+    HOST.flashToast?.('插入失败：连线已失效');
+    return null;
+  }
+  const src = state.nodes[edge.source];
+  const dst = state.nodes[edge.target];
+  const plan = planInsertOnEdge(src, dst, edge);
+  if (!plan.valid) {
+    // 端点缺失：不动原连线，只提示（避免用户丢数据）
+    HOST.flashToast?.('插入失败：连线的一端不存在');
+    DBG.warn('插入节点失败，端点缺失', edgeId);
+    return null;
+  }
+
+  // nodes.js ↔ edges.js 是双向依赖（nodes 要 bindLinkHandle/redrawEdges）。
+  // 这里走 HOST 注入，保持单向依赖，避免 ESM 循环解析的时序隐患。
+  const createNode = HOST.createNode;
+  const node = createNode(kind, {
+    x: plan.x, y: plan.y, w: plan.w, h: plan.h,
+    zoneId: plan.zoneId,
+    title: '节点',
+  });
+
+  // 先建两条新线，再删旧线：中途异常也不会让画布断开
+  const up = addEdge(src.id, node.id);
+  up.command = plan.upstreamCommand;
+  const down = addEdge(node.id, dst.id);
+  down.command = plan.downstreamCommand;
+
+  HOST.removeEdge(edgeId);
+  layoutEdgeLabel(up);
+  layoutEdgeLabel(down);
+  redrawEdges();
+  HOST.selectNode(node.id);
+  // 新节点直接进入重命名态：少一次双击（节点 DOM 理论上存在，但仍做防御）
+  try {
+    node.el?.querySelector?.('.title')?.dispatchEvent(new MouseEvent('dblclick', { bubbles: true }));
+  } catch (err) {
+    DBG.warn('自动进入重命名失败（不影响节点创建）', err.message);
+  }
+  HOST.scheduleSnapshot?.();
+  DBG.log('插入节点', node.id, '← 连线', edgeId);
+  HOST.flashToast?.('已插入节点');
+  return node;
+}
+
+/** 静默删除：只清数据与 DOM，不重绘（调用方统一 redrawEdges） */
+export function removeEdgeSilent(edgeId) {
+  if (!canRemoveEdgeLocal(edgeId)) return false;
+  HOST.removeEdge(edgeId);
+  return true;
+}
+function canRemoveEdgeLocal(edgeId) {
+  return !!(state.edges && edgeId && state.edges[edgeId]);
+}
+
+// 右键连线：小菜单「插入节点 / 删除连线」
+// 菜单常驻 DOM（懒创建一次），避免每次右键都堆节点。
+function ensureEdgeMenu() {
+  let menu = document.getElementById('edgeMenu');
+  if (menu) return menu;
+  menu = document.createElement('div');
+  menu.id = 'edgeMenu';
+  menu.hidden = true;
+  menu.innerHTML = `
+    <button data-act="insert" type="button">在中间插入节点</button>
+    <button data-act="delete" type="button" class="danger">删除连线</button>
+  `;
+  // 挂到 body：#canvasWrap 有 overflow:hidden，放在里面贴边时菜单会被裁掉
+  (document.body || document.getElementById('canvasWrap'))?.appendChild(menu);
+
+  menu.addEventListener('click', (e) => {
+    const btn = e.target.closest('button[data-act]');
+    if (!btn) return;
+    const id = menu.dataset.edge;
+    hideEdgeMenu();
+    if (btn.dataset.act === 'insert') insertNodeOnEdge(id, 'doc');
+    else if (btn.dataset.act === 'delete') {
+      removeEdgeSilent(id);
+      redrawEdges();
+      HOST.scheduleSnapshot?.();
+    }
+  });
+  // 点外部 / Esc 关闭
+  document.addEventListener('pointerdown', (e) => {
+    if (!menu.hidden && !menu.contains(e.target)) hideEdgeMenu();
+  }, true);
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && !menu.hidden) hideEdgeMenu();
+  });
+  return menu;
+}
+
+function showEdgeMenu(edgeId, clientX, clientY) {
+  const menu = ensureEdgeMenu();
+  menu.dataset.edge = edgeId;
+  menu.hidden = false;
+  const r = menu.getBoundingClientRect();
+  const left = Math.min(clientX, window.innerWidth - r.width - 8);
+  const top = Math.min(clientY, window.innerHeight - r.height - 8);
+  menu.style.left = Math.max(8, left) + 'px';
+  menu.style.top = Math.max(8, top) + 'px';
+}
+
+export function hideEdgeMenu() {
+  const menu = document.getElementById('edgeMenu');
+  if (menu) menu.hidden = true;
+}
+
+// =========================================================================
 // 8. 连线命令标签（就地编辑，不弹窗）
 // =========================================================================
 export function createEdgeLabel(edge) {
@@ -236,6 +363,25 @@ export function createEdgeLabel(edge) {
 
   el.addEventListener('click', (e) => { e.stopPropagation(); selectEdge(edge.id); });
   el.addEventListener('dblclick', (e) => { e.stopPropagation(); editEdgeLabel(edge); });
+  el.addEventListener('contextmenu', (e) => {
+    e.preventDefault(); e.stopPropagation();
+    selectEdge(edge.id);
+    showEdgeMenu(edge.id, e.clientX, e.clientY);
+  });
+  // 标签上的「＋插入 / ×删除」：用 mousedown 拦，避免先触发 click→选中 的副作用
+  el.addEventListener('mousedown', (e) => {
+    const btn = e.target.closest('.edge-ins, .edge-del');
+    if (!btn) return;
+    e.stopPropagation();
+    e.preventDefault();
+    if (btn.classList.contains('edge-ins')) {
+      insertNodeOnEdge(edge.id, 'doc');
+    } else {
+      removeEdgeSilent(edge.id);
+      redrawEdges();
+      HOST.scheduleSnapshot?.();
+    }
+  });
 }
 
 export function layoutEdgeLabel(edge) {
@@ -260,6 +406,11 @@ export function layoutEdgeLabel(edge) {
   }
   // 若属于当前激活任务，加个小标记
   if (edgeInActiveTask(edge.id)) text += '<span class="task-dot" title="属于当前任务">●</span>';
+  // 选中态：右侧出现「＋插入 / ×删除」两个小按钮（触摸设备的主要入口）
+  if (state.selectedEdgeId === edge.id && !edge._editing) {
+    text += '<button class="edge-ins" type="button" title="在这条连线中间插入节点">＋</button>'
+          + '<button class="edge-del" type="button" title="删除这条连线">×</button>';
+  }
   edge.labelEl.innerHTML = text;
   edge.labelEl.classList.toggle('executable', executable);
 }

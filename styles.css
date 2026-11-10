@@ -79,6 +79,7 @@
   .ic-link { -webkit-mask-image: var(--ic-link); mask-image: var(--ic-link); }
   .ic-save { -webkit-mask-image: var(--ic-save); mask-image: var(--ic-save); }
   .ic-stack{ -webkit-mask-image: var(--ic-stack); mask-image: var(--ic-stack); }
+  .ic-tools { -webkit-mask-image: var(--ic-tools); mask-image: var(--ic-tools); }
   .ic-select{-webkit-mask-image: var(--ic-select); mask-image: var(--ic-select); }
   .ic-down { -webkit-mask-image: var(--ic-down); mask-image: var(--ic-down); }
   .ic-up   { -webkit-mask-image: var(--ic-up); mask-image: var(--ic-up); }
@@ -109,6 +110,7 @@
     --ic-outline: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M2 3h12v1.4H2V3zm0 4.3h12v1.4H2V7.3zM2 11.6h8v1.4H2v-1.4z'/%3E%3C/svg%3E");
     --ic-task: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M9.2 1.2 3 9.3h3.4L5.2 14.8 12 6.4H8.3l.9-5.2z'/%3E%3C/svg%3E");
     --ic-clip: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M3.5 2h6.2L14 6.3v7.2A1.5 1.5 0 0 1 12.5 15h-9A1.5 1.5 0 0 1 2 13.5v-10A1.5 1.5 0 0 1 3.5 2zM9 2.4V6h3.6L9 2.4z'/%3E%3C/svg%3E");
+    --ic-tools: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M2 9.2h2.2v4.2H2V9.2zm3.5-2.8h2.2v7H5.5v-7zM9 3.2h2.2v10.2H9V3.2zM12.5 6.6h2.2v6.8h-2.2V6.6z'/%3E%3C/svg%3E");
     --ic-send: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M1.7 7.1 14 1.6a.5.5 0 0 1 .66.65L9.4 14.3a.5.5 0 0 1-.93.03L6.3 9.9a.8.8 0 0 0-.4-.4L1.68 8.03a.5.5 0 0 1 .02-.93z'/%3E%3C/svg%3E");
   }
   * { box-sizing: border-box; }
@@ -199,14 +201,48 @@
     background: rgba(79,70,229,.06); pointer-events: none;
   }
 
-  /* ---------- 左侧大纲栏 ---------- */
-  #outline {
-    position: relative; flex: 0 0 250px; width: 250px;
-    background: #fff; border-right: 1px solid var(--border);
-    display: flex; flex-direction: column; min-width: 0; z-index: 30;
+  /* =======================================================================
+     悬浮面板（大纲 / 对话 / 工具栏）
+     -----------------------------------------------------------------------
+     三块面板都是 #canvasWrap 内的 absolute 元素，不占文档流：
+     画布始终满宽，位置由 floating.js 拖拽并持久化。
+     抽屉/互斥那套（78vw 移出屏幕、body:has() 隐藏 toggle）已彻底删除。
+     ======================================================================= */
+  #outline, #sidebar, #toolbar {
+    position: absolute;
+    background: var(--surface);
+    border: 1px solid var(--line-2);
+    border-radius: var(--r-3);
+    box-shadow: var(--sh-2);
+    display: flex; flex-direction: column; min-width: 0;
+    overflow: hidden;
+    z-index: 40;
   }
-  #outline.collapsed { flex-basis: 0; width: 0; border-right: 0; overflow: hidden; }
-  #outline.collapsed .ol-body, #outline.collapsed .ol-head { display: none; }
+  #outline { left: 16px; top: 16px; width: 260px; max-height: calc(100% - 32px); }
+  #sidebar  { right: 16px; top: 16px; width: 340px; max-height: calc(100% - 32px); }
+  /* 折叠：只留头部那条标题栏，left/top 不变 → 仍然可以拖 */
+  #outline.collapsed, #sidebar.collapsed, #toolbar.collapsed { max-height: none; }
+  #outline.collapsed > *:not(.ol-tabs),
+  #sidebar.collapsed > *:not(.sb-head),
+  #toolbar.collapsed > *:not(.tb-head) { display: none !important; }
+  /* 拖动中禁用过渡与文字选中，避免闪烁 */
+  #outline.dragging, #sidebar.dragging, #toolbar.dragging {
+    transition: none; user-select: none; z-index: 55; box-shadow: var(--sh-3);
+  }
+
+  /* 面板折叠按钮（原 drawer-close） */
+  .panel-fold {
+    flex: none; width: 22px; height: 22px; line-height: 1;
+    border: 0; border-radius: var(--r-1); background: transparent;
+    color: var(--ink-3); font-size: 15px; cursor: pointer; padding: 0;
+  }
+  .panel-fold:hover { background: var(--subtle-3); color: var(--ink); }
+  /* 折叠后按钮变成「＋」，提示可以再展开 */
+  .ol-tab { cursor: grab; }
+  .ol-tabs, .sb-head, .tb-head { cursor: grab; touch-action: none; }
+  #outline.dragging .ol-tabs, #sidebar.dragging .sb-head, #toolbar.dragging .tb-head { cursor: grabbing; }
+  #outline.collapsed .ol-tab { cursor: pointer; }
+  #outline.collapsed #olClose, #sidebar.collapsed #sbClose { transform: none; }
   .ol-head {
     display: flex; align-items: center; gap: 6px;
     padding: 10px 12px; border-bottom: 1px solid #eceef1;
@@ -297,21 +333,6 @@
   .lvl-btn:hover { background: #e2e5ea; }
   .lvl-btn.active { background: var(--accent); color: #fff; }
 
-  #toggleOutline {
-    position: absolute; left: 16px; top: 16px; z-index: 31;
-    padding: 7px 12px; background: #fff; color: #333;
-    border: 1px solid var(--border); border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,.08);
-  }
-  #toggleOutline:hover { background: #f5f6f8; }
-
-  /* 抽屉收起按钮：默认隐藏，仅窄屏（抽屉模式）显示。
-     桌面端侧栏在文档流内，外部 #toggleOutline 一直可点，不需要它。 */
-  .drawer-close {
-    display: none;
-    padding: 0 8px; background: none; border: 0; cursor: pointer;
-    font-size: 15px; line-height: 1; color: #666;
-  }
-  .drawer-close:hover { color: #111; }
 
   /* ---------- 区域（Zone）---------- */
   .zone {
@@ -446,6 +467,33 @@
     border-style: dashed; background: rgba(255,255,255,.92);
   }
   .edge-label.placeholder:hover { border-style: solid; }
+  /* 标签上的两个小按钮：只在选中时出现，触摸设备的主要入口 */
+  .edge-label .edge-ins,
+  .edge-label .edge-del {
+    width: 14px; height: 14px; margin-left: 4px; padding: 0;
+    border-radius: 3px; font-size: 11px; line-height: 1;
+    background: var(--subtle-2); color: var(--ink-2);
+    border: 0; cursor: pointer; vertical-align: middle;
+  }
+  .edge-label .edge-ins:hover { background: var(--accent-weak); color: var(--accent); }
+  .edge-label .edge-del:hover { background: #fee2e2; color: var(--danger); }
+
+  /* 连线右键菜单 */
+  #edgeMenu {
+    position: fixed; z-index: 70; min-width: 148px; padding: 5px;
+    background: var(--surface); border: 1px solid var(--line-2);
+    border-radius: var(--r-2); box-shadow: var(--sh-3);
+    display: flex; flex-direction: column; gap: 2px;
+  }
+  #edgeMenu[hidden] { display: none; }
+  #edgeMenu button {
+    background: transparent; color: var(--ink); font-weight: 500;
+    font-size: 12.5px; padding: 7px 9px; text-align: left;
+    justify-content: flex-start; border-radius: var(--r-1);
+  }
+  #edgeMenu button:hover { background: var(--subtle-2); }
+  #edgeMenu button.danger { color: var(--danger); }
+  #edgeMenu button.danger:hover { background: #fee2e2; }
   /* 编辑态：变成一个真正的输入框 */
   .edge-input {
     position: absolute; z-index: 10;
@@ -708,18 +756,45 @@
   }
   .resize-handle:hover { background: linear-gradient(135deg, transparent 50%, var(--accent) 50%); }
 
-  /* ---------- 工具栏 ---------- */
+  /* ---------- 工具栏（悬浮面板，纵向紧凑网格）---------- */
   #toolbar {
-    position: absolute; left: 16px; bottom: 16px; z-index: 20;
-    display: flex; gap: 8px; align-items: center; flex-wrap: wrap;
-    background: var(--surface); padding: 8px 10px; border-radius: var(--r-3);
-    border: 1px solid var(--line-2);
-    box-shadow: var(--sh-2); font-size: 13px;
-    /* 为右侧 #viewctl 让出空间，否则窄屏下会重叠并遮住缩放按钮。
-       用 max(...) 保证下限：可用宽度不足时 calc 会变负数，
-       导致工具栏被压成一条竖线（按钮逐字换行）。 */
-    max-width: max(240px, calc(100% - 32px - 260px));
+    left: 16px; bottom: 74px; width: 264px; max-width: calc(100% - 32px);
+    /* 最多占 70% 视口高，超出内部滚动 —— 否则窄屏竖向面板会铺满整屏 */
+    max-height: calc(100% - 96px);
+    font-size: 13px; z-index: 45;
   }
+  #toolbar .tb-body { padding-bottom: 8px; }
+  #toolbar.folded { display: none; }   /* 收起后只剩悬浮球 */
+  .tb-head {
+    display: flex; align-items: center; gap: 6px; flex: none;
+    height: 34px; padding: 0 6px 0 11px;
+    border-bottom: 1px solid var(--line-2); background: var(--subtle);
+  }
+  #toolbar.collapsed .tb-head { border-bottom: 0; }
+  .tb-title { font-size: 12px; font-weight: 700; color: var(--ink-2); letter-spacing: .01em; }
+  .tb-spacer { flex: 1; }
+  .tb-fold { width: 20px; height: 20px; padding: 0; font-size: 13px; line-height: 1; color: var(--ink-3); }
+  .tb-fold:hover { background: var(--subtle-3); color: var(--ink); }
+  .tb-body {
+    display: flex; flex-direction: column; gap: 10px;
+    padding: 10px; overflow-y: auto;
+    overscroll-behavior: contain; scrollbar-width: thin;
+  }
+  .tb-body #apiKey { width: 100%; padding: 6px 8px; font-size: 12px; }
+  .tb-sep { display: none; }   /* 纵向布局用分组标题代替分隔线 */
+
+  /* 悬浮球 */
+  #toolbarFab {
+    position: absolute; left: 16px; bottom: 16px; z-index: 46;
+    width: 46px; height: 46px; border-radius: 50%; padding: 0;
+    background: var(--surface); color: var(--accent);
+    border: 1px solid var(--line-2); box-shadow: var(--sh-2);
+  }
+  #toolbarFab .ic { width: 20px; height: 20px; margin: 0; }
+  #toolbarFab:hover { background: var(--accent-weak); color: var(--accent-hover); }
+  /* 面板展开时悬浮球变「按下态」而不是消失 —— 否则它会被面板盖住，
+     用户既看不到也点不到，等于失去收起入口。 */
+  #toolbarFab.active { background: var(--accent); color: #fff; }
   button {
     border: 0; border-radius: 8px; padding: 7px 13px; font-size: 13px;
     background: var(--accent); color: #fff; cursor: pointer; font-weight: 600;
@@ -737,17 +812,30 @@
 
   /* 工具栏分组：同类动作贴在一起，组间一条细竖线。
      之前 13 个按钮等权排一排，主操作「运行选中」淹没在灰胶囊里。 */
-  .tb-group { display: flex; gap: 6px; align-items: center; }
-  .tb-sep {
-    width: 1px; height: 20px; flex: none;
-    background: var(--line-2); margin: 0 2px;
+  /* 分组：紧凑图标网格。按钮高 30px、字号 12px，
+     靠「组标题 + 留白」分隔而不是粗分隔线 —— 目标是不抢画布视线。 */
+  .tb-section { display: flex; flex-direction: column; gap: 5px; }
+  .tb-label {
+    font-size: 10.5px; font-weight: 700; color: var(--ink-3);
+    letter-spacing: .06em; text-transform: uppercase;
   }
-  #toolbar #runSel { box-shadow: 0 1px 2px rgba(79,70,229,.35); }
-  @media (max-width: 1024px) {
-    /* 窄屏隐藏分隔线：横向滚动时它们只是噪声 */
-    .tb-sep { display: none; }
-    .tb-group { gap: 6px; }
+  .tb-group { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; }
+  #toolbar .tb-group > button,
+  #toolbar .tb-group > select {
+    width: 100%; min-width: 0; height: 30px; padding: 0 6px;
+    font-size: 12px; font-weight: 500; border-radius: var(--r-1);
+    justify-content: center; gap: 4px;
   }
+  #toolbar .tb-group > button.ghost { background: var(--subtle); }
+  #toolbar .tb-group > button.ghost:hover { background: var(--subtle-3); }
+  #toolbar .tb-group .ic { width: 13px; height: 13px; margin-right: 0; opacity: .8; }
+  #toolbar .tb-group > button.icon-only { padding: 0; }
+  #toolbar .tb-group > select { grid-column: span 2; font-size: 12px; padding: 0 6px; }
+  /* 运行组：主操作独占一行 */
+  .tb-run { grid-template-columns: 1fr 1fr; }
+  #toolbar .tb-run > button { height: 32px; font-weight: 600; }
+  #toolbar #runSel { box-shadow: 0 1px 2px rgba(79,70,229,.3); }
+  #toolbar #hint { font-size: 10.5px; line-height: 1.5; color: var(--ink-3); text-align: center; }
   input.key {
     padding: 7px 9px; border: 1px solid #d5d7db; border-radius: 8px;
     font-size: 13px; width: 230px;
@@ -811,14 +899,9 @@
   #minimap.hidden { display: none; }
   #minimap canvas { display: block; width: 100%; height: 100%; }
 
-  /* ---------- 侧边栏（对话 + 画布识别）---------- */
-  #sidebar {
-    position: relative; flex: 0 0 360px; width: 360px;
-    background: #fff; border-left: 1px solid var(--border);
-    display: flex; flex-direction: column; min-width: 0; z-index: 30;
-  }
-  #sidebar.collapsed { flex-basis: 0; width: 0; border-left: 0; }
-  #sidebar.collapsed .sb-body, #sidebar.collapsed .sb-head { display: none; }
+  /* ---------- 侧边栏（对话，浮窗）---------- */
+  /* 定位见上方「悬浮面板」段落 */
+  #sidebar .sb-body { min-height: 0; overflow: hidden; }
 
   /* ---------- 收藏面板（覆盖在侧栏上方）---------- */
   #favPanel {
@@ -960,13 +1043,6 @@
   .sb-actions .grow { flex: 1; }
   .sb-actions label { font-size: 12px; color: #666; display: flex; gap: 4px; align-items: center; cursor: pointer; }
 
-  /* 折叠/展开按钮 */
-  #toggleSidebar {
-    position: absolute; right: 16px; top: 16px; z-index: 31;
-    padding: 7px 12px; background: #fff; color: #333;
-    border: 1px solid var(--border); border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,.08);
-  }
-  #toggleSidebar:hover { background: #f5f6f8; }
 
   /* 轻提示 */
   #toast {
@@ -979,96 +1055,27 @@
   #toast.show { opacity: .95; }
 
 /* =========================================================================
-   移动端 / 平板适配（窄屏时侧栏改为浮层抽屉，画布全屏）
+   移动端 / 平板适配
+   -------------------------------------------------------------------------
+   浮窗本身就是绝对定位，窄屏不需要再切「抽屉模式」；
+   这里只调整尺寸、把工具栏默认收进悬浮球（见 floating.js）。
    ========================================================================= */
 @media (max-width: 1024px) {
-  /* 侧栏脱离文档流，浮在画布上 */
-  #outline, #sidebar {
-    position: absolute; top: 0; bottom: 0; z-index: 50;
-    width: min(78vw, 320px);
-    box-shadow: 0 0 24px rgba(0,0,0,.18);
-    transition: transform .22s ease;
-  }
-  #outline { left: 0; transform: translateX(0); border-right: 1px solid var(--border); }
-  #sidebar { right: 0; transform: translateX(0); border-left: 1px solid var(--border); }
+  /* 浮窗贴边、更窄，避免遮挡半个画布 */
+  #outline { left: 8px; top: 8px; width: min(64vw, 300px); max-height: calc(100% - 16px); }
+  #sidebar { left: 8px; right: auto; top: 96px; width: min(84vw, 340px); max-height: calc(100% - 180px); }
+  #toolbar { left: 8px; bottom: 8px; width: min(92vw, 320px); max-height: min(70vh, 560px); }
+  #toolbarFab { left: 12px; bottom: 12px; }
 
-  /* 折叠 = 移出屏幕（保留宽度，便于动画） */
-  #outline.collapsed, #sidebar.collapsed {
-    flex-basis: min(78vw, 320px); width: min(78vw, 320px);
-    border: 0; overflow: visible;
-  }
-  #outline.collapsed { transform: translateX(-102%); }
-  #sidebar.collapsed { transform: translateX(102%); }
-  /* 移动端折叠时仍显示内部内容（只是整体移出屏幕） */
-  #outline.collapsed .ol-body, #outline.collapsed .ol-head,
-  #sidebar.collapsed .sb-body, #sidebar.collapsed .sb-head { display: flex; }
-  #outline.collapsed .ol-body, #sidebar.collapsed .sb-body { display: block; }
+  /* 头部加大，方便手指按住拖动 */
+  .sb-head, .ol-tab, .tb-head { min-height: 40px; }
+  .panel-fold { width: 30px; height: 30px; font-size: 17px; }
 
-  /* 折叠按钮的位置与层级 —— 这里踩过三次坑，完整因果如下：
-
-     坑 1（原状：z-index:31，侧栏 50）：按钮 left/right:16px; top:16px
-     恰好落在侧栏头部（.ol-tabs / .sb-head）上方，被浮层侧栏盖住，
-     elementFromPoint 命中 .ol-tab 而不是按钮 → **一展开就再也收不回去**。
-
-     坑 2（只把 z-index 提到 51）：按钮变成盖住侧栏头部内容，
-     侧栏里的「⭐ 收藏」「清空」反而点不到了（旧内容被新层级反向撞车）。
-
-     坑 3（让按钮随侧栏平移出去）：900px 可用，但 420px 下侧栏宽 78vw，
-     两个按钮平移后互相重叠，反而更点不到。
-
-     最终做法：窄屏侧栏本质是「抽屉」。抽屉展开时，外部开关就该让位——
-     直接把外部按钮隐藏，由侧栏头部自己的「✕ 收起」负责关闭（见 #olClose/#sbClose）。
-     这样任意宽度都不会重叠，也不会遮挡侧栏内容。 */
-  body:has(#outline:not(.collapsed)) #toggleOutline,
-  body:has(#sidebar:not(.collapsed)) #toggleSidebar {
-    display: none;
-  }
-  /* 侧栏展开时，由侧栏自己的 ✕ 收起 */
-  #olClose, #sbClose { display: block; flex: none; }
-  /* 收藏面板打开时会在 z-index:60 上盖住整个侧栏（包括 .sb-head），
-     把抽屉 ✕ 提到它之上，否则面板一开就失去了「收起整个侧栏」的入口。
-     只窄屏需要（桌面侧栏在文档流内，外部 toggle 一直可点）。 */
-  #sidebar #sbClose {
-    position: absolute; right: 10px; top: 8px;
-    z-index: 61;
-    padding: 4px 8px;
-    background: rgba(255,255,255,.9);
-    border-radius: 6px;
-  }
-
-  /* 工具栏：缩小、允许换行、贴左上角 */
-  /* 平板/中等宽度：工具栏全宽贴底，按钮横向滚动，避免被挤成竖排 */
-  #toolbar {
-    left: 8px; right: 8px; bottom: 8px; padding: 6px;
-    max-width: none; flex-wrap: nowrap; overflow-x: auto;
-    overscroll-behavior-x: contain; scrollbar-width: thin;
-    gap: 6px;
-  }
-  #toolbar > * { flex: none; }
-  #toolbar button { font-size: 12px; padding: 6px 8px; white-space: nowrap; }
-  /* 画布切换器固定在工具栏左侧：工具栏是横向滚动的，
-     若按 DOM 顺序排在「💾 保存」后面就会被滚出可视区，用户找不到。
-     sticky 让它在滚动时始终贴住左侧，且仍参与滚动容器布局。 */
-  /* 注意：canvasPicker / canvasMenu 现在住在 .tb-group 里（工具栏分组后），
-     不再是 #toolbar 的直接子元素 —— 必须跟着放宽选择器，
-     否则 order/sticky 全部失效，切换器会被横向滚动挤出可视区。 */
-  #toolbar #canvasPicker,
-  #toolbar #canvasMenu {
-    position: sticky; left: 0; z-index: 1;
-    order: -1;                      /* 视觉上排在第一个，不用改 HTML */
-    background: #fff;
-    box-shadow: 4px 0 6px -4px rgba(0,0,0,.18);
-  }
-  /* 让「画布」这一组整体排到最前，组内两个控件仍按 DOM 顺序 */
-  #toolbar .tb-group:has(#canvasPicker) { order: -1; }
-  #toolbar #canvasMenu { left: 88px; }
-  #toolbar #canvasPicker { max-width: 6.5em; padding: 5px 4px; }
-  /* 窄屏隐藏长提示：它会把工具栏撑成两层，在平板上太占地方 */
-  #toolbar #hint { display: none; }
-  /* 窄屏：视图控件缩小并上移，给工具栏留出底部空间，避免重叠遮挡 */
-  #viewctl { bottom: auto; top: 56px; right: 8px; padding: 4px; gap: 4px; }
+  /* 视图控件缩小，靠右上；小地图在窄屏隐藏 */
+  #viewctl { bottom: auto; top: 8px; right: 8px; padding: 4px; gap: 4px; }
   #viewctl button { padding: 5px 7px; font-size: 11px; }
   #zoomLabel { min-width: 34px; font-size: 11px; }
+  #minimap { display: none !important; }
 
   /* 节点内的端口/手柄加大，方便手指点中；边框条带也加宽 */
   .port { width: 18px; height: 18px; opacity: 1; }
@@ -1079,9 +1086,6 @@
   .edge-hot[data-side="top"], .edge-hot[data-side="bottom"] { height: 18px; left: 14px; right: 14px; }
   .edge-hot[data-side="top"] { top: -12px; }
   .edge-hot[data-side="bottom"] { bottom: -12px; }
-
-  /* 小地图在窄屏隐藏（避免遮挡） */
-  #minimap { display: none !important; }
 
   /* 输入框加大，防止 iOS 自动放大 */
   textarea, input, select { font-size: 16px; }

@@ -1,7 +1,6 @@
 import { DBG, HOST, PREFIX, documentRef, flashToast, state } from './state.js';
 import { redrawEdges } from './edges.js';
 import { runEdge, setOutput, streamLLM } from './exec.js';
-import { removeEdge } from './nodes.js';
 import { depthOf, topoSortEdges } from './tasks.js';
 // 11. 全局运行 / 快捷键
 // =========================================================================
@@ -192,20 +191,7 @@ export function runCurrentEdge() {
   DBG.warn('没有选中/悬停任何连线或执行节点');
 }
 
-// 顶层不能直接写 document：Node 下 import 本模块（纯逻辑测试）会 ReferenceError
-documentRef()?.addEventListener('keydown', (e) => {
-  if (e.altKey && e.key === 'Enter') {
-    e.preventDefault();
-    runCurrentEdge();
-  }
-  // Delete 删除选中连线
-  if ((e.key === 'Delete' || e.key === 'Backspace')
-      && state.selectedEdgeId
-      && document.activeElement === document.body) {
-    removeEdge(state.selectedEdgeId);
-    redrawEdges();
-    HOST.scheduleSnapshot?.();
-  }
-});
+// 键盘绑定统一在 shortcuts.js（Alt+Enter / Delete / Insert）：
+// 这里曾各自绑过一份，导致 Delete 触发两次、且两处守卫条件不一致。
 
 // =========================================================================

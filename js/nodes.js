@@ -7,6 +7,13 @@ import { runNodeById } from './run.js';
 import { worldEl } from './viewport.js';
 // 循环依赖：zones.js 也 import 本文件的 layoutNode/refreshAllZonePickers。
 // 两侧都只导出函数声明（无顶层副作用），ESM 提升后可安全互相调用。
+//
+// edges.js 反过来需要 createNode / removeEdge / selectNode（在连线中间插入节点），
+// 若让它直接 import 本文件就形成双向依赖。这里统一注入到 HOST，
+// 让依赖保持单向：edges → HOST → nodes。
+HOST.createNode = createNode;
+HOST.removeEdge = removeEdge;
+HOST.selectNode = selectNode;
 import { autoAssignZone, zoneAtPoint } from './zones.js';
 // 2. 节点增删
 // =========================================================================
