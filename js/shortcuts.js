@@ -13,6 +13,8 @@ import { layoutNode, removeEdge, removeNode, selectNode } from './nodes.js';
 import { redrawEdges } from './edges.js';
 import { canvasEl, centerContent, fitToContent, zoomAt } from './viewport.js';
 import { insertNodeOnEdge } from './edges.js';
+import { setNodeColor } from './nodes.js';
+import { NODE_COLORS } from './nodestyles.js';
 import { runCurrentEdge } from './run.js';
 
 // 焦点在可编辑元素里时，快捷键必须让位（否则 Backspace 会删节点）
@@ -96,11 +98,22 @@ export function bindShortcuts() {
     // 带修饰键的其余组合交给浏览器（Ctrl+C/V 等）
     if (mod || e.altKey) return;
 
-    // ---- Insert：在选中的连线中间插入节点 ----
+    // ---- Insert：在选中的连线中间插入节点（Shift+Insert = 插在命令之后） ----
     if (e.key === 'Insert' && state.selectedEdgeId && state.edges[state.selectedEdgeId]) {
       e.preventDefault();
-      insertNodeOnEdge(state.selectedEdgeId, 'doc');
-      DBG.log('快捷键', 'Insert 插入节点');
+      const position = e.shiftKey ? 'after' : 'before';
+      insertNodeOnEdge(state.selectedEdgeId, 'doc', position);
+      DBG.log('快捷键', 'Insert 插入节点', position);
+      return;
+    }
+
+    // ---- 数字键 1-7：给选中节点上色（0 = 恢复默认） ----
+    if (state.selectedNodeId && /^[0-7]$/.test(e.key)) {
+      e.preventDefault();
+      const idx = Number(e.key);
+      const color = idx === 0 ? null : NODE_COLORS[idx - 1] || null;
+      setNodeColor(state.selectedNodeId, color);
+      DBG.log('快捷键', '节点配色', color);
       return;
     }
 

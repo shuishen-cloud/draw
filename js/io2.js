@@ -24,6 +24,8 @@ export function exportCanvasData() {
       x: n.x, y: n.y, w: n.w, h: n.h,
       text: n.text || '', src: n.src || '', prompt: n.prompt || '',
       zoneId: n.zoneId || null, level: n.level || 1,
+      // 卡片配色（可选）：null/缺失表示跟随 kind 默认色
+      ...(n.color ? { color: n.color } : {}),
       // 来源元信息（ChatTool 卡片），有则带上，保证「保存→重开」后去重仍有效
       ...(n.origin ? { origin: n.origin } : {}),
     })),
@@ -66,6 +68,7 @@ export function importCanvasData(data) {
       title: n.title, x: n.x, y: n.y, w: n.w, h: n.h,
       text: n.text, src: n.src, prompt: n.prompt,
       zoneId: n.zoneId, level: n.level,
+      color: n.color || null,
       origin: n.origin || null,
     });
     // 保持原 id，保证连线引用一致
@@ -137,6 +140,7 @@ export function appendCanvasData(raw) {
       const node = createNode(d.kind, {
         title: d.title, text: d.text, src: d.src, prompt: d.prompt,
         x: d.x, y: d.y, w: d.w, h: d.h,
+        color: d.color || null,
         origin: d.origin,
       });
       if (d.srcId) extToLocal.set(String(d.srcId), node.id);

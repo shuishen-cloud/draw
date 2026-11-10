@@ -15,6 +15,7 @@ HOST.createNode = createNode;
 HOST.removeEdge = removeEdge;
 HOST.selectNode = selectNode;
 import { autoAssignZone, zoneAtPoint } from './zones.js';
+import { NODE_COLORS, normalizeColor } from './nodestyles.js';
 // 2. 节点增删
 // =========================================================================
 export function createNode(kind, opts = {}) {
@@ -33,6 +34,8 @@ export function createNode(kind, opts = {}) {
     prompt: opts.prompt ?? '',             // 执行节点的提示词（写在节点内）
     zoneId: opts.zoneId ?? null,           // 手动归属的区域
     level: opts.level ?? 1,                // 大纲层级（预留）
+    // 卡片配色：调色板 key 或 null（null = 跟随 kind 默认色，旧画布行为不变）
+    color: normalizeColor(opts.color),
     // 卡片来源（上层 ChatTool 传送时写入，见 chattool.js）。
     // 用于溯源与「重复拉取去重」；本地新建节点为 null。
     origin: opts.origin ?? null,
@@ -82,7 +85,7 @@ export function renderNode(node) {
   el.dataset.kind = node.kind;
   el.innerHTML = `
     <div class="bar">
-      <span class="dot"></span>
+      <button class="node-color" type="button" title="设置卡片颜色"></button>
       <span class="title" title="双击可重命名"></span>
       <button class="fav-node" type="button" title="收藏此节点">⭐</button>
       <button class="run-node" type="button" title="运行此节点">▶</button>
@@ -101,6 +104,23 @@ export function renderNode(node) {
     <div class="resize-handle" title="拖拽调整大小"></div>
   `;
   el.querySelector('.title').textContent = node.title;
+
+  // 颜色按钮：点它弹出调色板
+  const colorBtn = el.querySelector('.node-color');
+  const syncColor = () => {
+    // 用 removeAttribute 而不是 dataset.color = ''：空串仍会生成 data-color=""
+    // 属性，CSS 里 [data-color] 选择器就会误命中。
+    if (node.color) el.setAttribute('data-color', node.color);
+    else el.removeAttribute('data-color');
+    colorBtn.classList.toggle('custom', !!node.color);
+  };
+  syncColor();
+  colorBtn.addEventListener('pointerdown', (e) => e.stopPropagation());
+  colorBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    openColorPalette(node, colorBtn);
+  });
+  node.__syncColor = syncColor;
 
   // ---- 标题就地重命名（双击进入）----
   bindTitleEdit(node, el.querySelector('.title'));
@@ -428,6 +448,59 @@ export function layoutNode(node) {
   el.style.top = node.y + 'px';
   el.style.width = node.w + 'px';
   el.style.height = node.h + 'px';
+}
+
+// =========================================================================
+// 3.5 卡片配色
+// =========================================================================
+export function setNodeColor(nodeId, colorKey) {
+  const node = state.nodes[nodeId];
+  if (!node) return false;
+  node.color = normalizeColor(colorKey);
+  node.__syncColor?.();
+  HOST.scheduleSnapshot?.();
+  DBG.log('节点配色', nodeId, node.color);
+  return true;
+}
+
+// 调色板浮层：节点标题栏的颜色按钮点开
+function openColorPalette(node, anchor) {
+  let pop = document.getElementById('colorPalette');
+  if (!pop) {
+    pop = document.createElement('div');
+    pop.id = 'colorPalette';
+    pop.hidden = true;
+    pop.innerHTML = NODE_COLORS
+      .map(c => `<button type="button" class="cp-swatch" data-color="${c}" title="${c}"></button>`)
+      .join('')
+      + '<button type="button" class="cp-clear" data-color="">跟随类型默认</button>';
+    document.body.appendChild(pop);
+    pop.addEventListener('click', (e) => {
+      const b = e.target.closest('button');
+      if (!b) return;
+      const n = state.nodes[pop.dataset.node];
+      if (n) setNodeColor(n.id, b.dataset.color || null);
+      pop.hidden = true;
+    });
+    document.addEventListener('pointerdown', (e) => {
+      if (!pop.hidden && !pop.contains(e.target) && !e.target.closest('.node-color')) {
+        pop.hidden = true;
+      }
+    }, true);
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && !pop.hidden) pop.hidden = true;
+    });
+  }
+  pop.dataset.node = node.id;
+  pop.hidden = false;
+  // 当前色高亮
+  pop.querySelectorAll('.cp-swatch').forEach((b) => {
+    b.classList.toggle('active', b.dataset.color === node.color);
+  });
+  const r = anchor.getBoundingClientRect();
+  const pr = pop.getBoundingClientRect();
+  pop.style.left = Math.max(8, Math.min(r.left, window.innerWidth - pr.width - 8)) + 'px';
+  pop.style.top = Math.min(r.bottom + 6, window.innerHeight - pr.height - 8) + 'px';
 }
 
 export function selectNode(id) {

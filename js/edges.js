@@ -234,11 +234,13 @@ export function drawGhost(link) {
 // =========================================================================
 
 /**
- * 在连线中间插入一个节点：A →(cmd) B  变成  A →(cmd) X →(空) B
+ * 在连线中间插入一个节点。
+ *   position='before'（默认）: A →(空) X →(原命令) B
+ *   position='after'        : A →(原命令) X →(空) B
  * 几何与命令归属由 edgeops.planInsertOnEdge 计算（纯逻辑，有单测）。
  * @returns {object|null} 新建的节点
  */
-export function insertNodeOnEdge(edgeId, kind = 'doc') {
+export function insertNodeOnEdge(edgeId, kind = 'doc', position = 'before') {
   const edge = state.edges[edgeId];
   if (!edge) {
     HOST.flashToast?.('插入失败：连线已失效');
@@ -246,7 +248,7 @@ export function insertNodeOnEdge(edgeId, kind = 'doc') {
   }
   const src = state.nodes[edge.source];
   const dst = state.nodes[edge.target];
-  const plan = planInsertOnEdge(src, dst, edge);
+  const plan = planInsertOnEdge(src, dst, edge, { position });
   if (!plan.valid) {
     // 端点缺失：不动原连线，只提示（避免用户丢数据）
     HOST.flashToast?.('插入失败：连线的一端不存在');
@@ -281,8 +283,8 @@ export function insertNodeOnEdge(edgeId, kind = 'doc') {
     DBG.warn('自动进入重命名失败（不影响节点创建）', err.message);
   }
   HOST.scheduleSnapshot?.();
-  DBG.log('插入节点', node.id, '← 连线', edgeId);
-  HOST.flashToast?.('已插入节点');
+  DBG.log('插入节点', node.id, '← 连线', edgeId, '位置', plan.position);
+  HOST.flashToast?.(plan.position === 'before' ? '已插入节点（命令前）' : '已插入节点（命令后）');
   return node;
 }
 
@@ -305,7 +307,15 @@ function ensureEdgeMenu() {
   menu.id = 'edgeMenu';
   menu.hidden = true;
   menu.innerHTML = `
-    <button data-act="insert" type="button">在中间插入节点</button>
+    <button data-act="insert-before" type="button">
+      <span class="mi-main">在命令前插入节点</span>
+      <span class="mi-sub">先处理原始信息，再走原命令</span>
+    </button>
+    <button data-act="insert-after" type="button">
+      <span class="mi-main">在命令后插入节点</span>
+      <span class="mi-sub">先执行原命令，再加工结果</span>
+    </button>
+    <div class="mi-sep"></div>
     <button data-act="delete" type="button" class="danger">删除连线</button>
   `;
   // 挂到 body：#canvasWrap 有 overflow:hidden，放在里面贴边时菜单会被裁掉
@@ -316,8 +326,10 @@ function ensureEdgeMenu() {
     if (!btn) return;
     const id = menu.dataset.edge;
     hideEdgeMenu();
-    if (btn.dataset.act === 'insert') insertNodeOnEdge(id, 'doc');
-    else if (btn.dataset.act === 'delete') {
+    const act = btn.dataset.act;
+    if (act === 'insert-before') insertNodeOnEdge(id, 'doc', 'before');
+    else if (act === 'insert-after') insertNodeOnEdge(id, 'doc', 'after');
+    else if (act === 'delete') {
       removeEdgeSilent(id);
       redrawEdges();
       HOST.scheduleSnapshot?.();
@@ -375,7 +387,9 @@ export function createEdgeLabel(edge) {
     e.stopPropagation();
     e.preventDefault();
     if (btn.classList.contains('edge-ins')) {
-      insertNodeOnEdge(edge.id, 'doc');
+      // 点 ＋ 弹出「命令前 / 命令后」二选一，而不是替用户拍板
+      const r = btn.getBoundingClientRect();
+      showEdgeMenu(edge.id, r.left, r.bottom + 4);
     } else {
       removeEdgeSilent(edge.id);
       redrawEdges();

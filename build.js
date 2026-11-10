@@ -27,6 +27,8 @@ const ORDER = [
   'nodes.js',
   // edgeops.js 是纯逻辑（插入节点的坐标/命令归属），edges.js 依赖它
   'edgeops.js',
+  // nodestyles.js 是卡片配色的纯数据层（调色板 key 校验/回退），nodes.js 依赖它
+  'nodestyles.js',
   'edges.js',
   'exec.js',
   'run.js',

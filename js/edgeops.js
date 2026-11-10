@@ -15,19 +15,26 @@
  * @param {object} [opts]
  * @param {number} [opts.width=300]   新节点宽
  * @param {number} [opts.height=160]  新节点高
+ * @param {'before'|'after'} [opts.position='before']
+ *        新节点相对「原命令」的位置：
+ *          before —— A →(空) X →(原命令) B  先处理原始信息，再交给原命令（默认）
+ *          after  —— A →(原命令) X →(空) B  原命令先作用，再对新结果加工
  * @returns {{
  *   x:number, y:number, w:number, h:number, zoneId:string|null,
- *   upstreamCommand:string, downstreamCommand:string, valid:boolean
+ *   upstreamCommand:string, downstreamCommand:string,
+ *   position:'before'|'after', valid:boolean
  * }}
  */
 export function planInsertOnEdge(src, dst, edge, opts = {}) {
   const w = opts.width ?? 300;
   const h = opts.height ?? 160;
+  // 非法值一律按 before：宁可给默认语义，也不让插入失败
+  const position = opts.position === 'after' ? 'after' : 'before';
   const valid = !!(src && dst);
   if (!valid) {
     return {
       x: 0, y: 0, w, h, zoneId: null,
-      upstreamCommand: '', downstreamCommand: '', valid: false,
+      upstreamCommand: '', downstreamCommand: '', position, valid: false,
     };
   }
 
@@ -41,10 +48,12 @@ export function planInsertOnEdge(src, dst, edge, opts = {}) {
     w, h,
     // 继承上游区域：否则插完会掉到大纲外面（用户心智里它属于同一组）
     zoneId: src.zoneId ?? null,
-    // 命令留在上游：原命令描述「对 src 的输出做什么」，语义上属于产生新节点的那一段。
-    // 这样 Alt+Enter 从 src 出发仍然执行原来的命令。
-    upstreamCommand: edge?.command ?? '',
-    downstreamCommand: '',
+    // 命令归属取决于插入位置 —— 命令只会出现在其中一条线上，绝不复制/丢失：
+    //   before：命令跟到下游（新节点先处理原始信息）
+    //   after ：命令留在上游（先执行原命令，结果进新节点）
+    upstreamCommand: position === 'after' ? (edge?.command ?? '') : '',
+    downstreamCommand: position === 'after' ? '' : (edge?.command ?? ''),
+    position,
     valid: true,
   };
 }

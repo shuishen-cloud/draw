@@ -478,6 +478,33 @@
   .edge-label .edge-ins:hover { background: var(--accent-weak); color: var(--accent); }
   .edge-label .edge-del:hover { background: #fee2e2; color: var(--danger); }
 
+  /* 调色板浮层（点标题栏色点弹出） */
+  #colorPalette {
+    position: fixed; z-index: 72; padding: 7px;
+    background: var(--surface); border: 1px solid var(--line-2);
+    border-radius: var(--r-2); box-shadow: var(--sh-3);
+    display: flex; align-items: center; gap: 6px; flex-wrap: wrap; width: 190px;
+  }
+  #colorPalette[hidden] { display: none; }
+  #colorPalette .cp-swatch {
+    width: 20px; height: 20px; padding: 0; border-radius: 50%;
+    border: 2px solid transparent; cursor: pointer;
+  }
+  #colorPalette .cp-swatch[data-color="gray"]   { background: #64748b; }
+  #colorPalette .cp-swatch[data-color="red"]    { background: #dc2626; }
+  #colorPalette .cp-swatch[data-color="orange"] { background: #ea580c; }
+  #colorPalette .cp-swatch[data-color="yellow"] { background: #ca8a04; }
+  #colorPalette .cp-swatch[data-color="green"]  { background: #16a34a; }
+  #colorPalette .cp-swatch[data-color="blue"]   { background: #2563eb; }
+  #colorPalette .cp-swatch[data-color="purple"] { background: #7c3aed; }
+  #colorPalette .cp-swatch:hover { transform: scale(1.12); }
+  #colorPalette .cp-swatch.active { border-color: var(--ink); }
+  #colorPalette .cp-clear {
+    width: 100%; margin-top: 2px; padding: 5px 6px; font-size: 11.5px;
+    background: var(--subtle-2); color: var(--ink-2); font-weight: 500;
+  }
+  #colorPalette .cp-clear:hover { background: var(--subtle-3); }
+
   /* 连线右键菜单 */
   #edgeMenu {
     position: fixed; z-index: 70; min-width: 148px; padding: 5px;
@@ -492,6 +519,10 @@
     justify-content: flex-start; border-radius: var(--r-1);
   }
   #edgeMenu button:hover { background: var(--subtle-2); }
+  #edgeMenu button { flex-direction: column; align-items: flex-start; gap: 1px; line-height: 1.35; }
+  #edgeMenu .mi-main { font-size: 12.5px; font-weight: 600; }
+  #edgeMenu .mi-sub { font-size: 10.5px; color: var(--ink-3); font-weight: 400; }
+  #edgeMenu .mi-sep { height: 1px; background: var(--line-2); margin: 3px 4px; }
   #edgeMenu button.danger { color: var(--danger); }
   #edgeMenu button.danger:hover { background: #fee2e2; }
   /* 编辑态：变成一个真正的输入框 */
