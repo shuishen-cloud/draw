@@ -119,3 +119,47 @@ export const CHATTOOL_DRAW_URL = resolveChatToolUrl(
 | 服务器路径不是 `/8000` | 前缀抽成常量，改一行 |
 | `credentials:'include'` 触发 CORS 更严校验 | 同源不涉及 CORS；跨源时 ChatTool 已配 `CHATTOOL_CORS_ORIGINS` |
 | 本机开发被误判成服务器 | 验收 #2/#3/#7 直接覆盖 |
+
+---
+
+## 6. 实现与校验结果
+
+### 6.1 实测
+
+`resolveChatToolUrl` 各分支（`node --test` 注入 loc）：
+
+| loc | 返回 |
+|---|---|
+| `{protocol:'https:',origin:'https://ex.com',hostname:'ex.com'}` | `https://ex.com/8000/api/favorites/draw` |
+| `{protocol:'http:',origin:'http://1.2.3.4:8080',hostname:'1.2.3.4'}` | `http://1.2.3.4:8080/8000/api/favorites/draw` |
+| `hostname: 'localhost' / '127.0.0.1' / '::1'` | `http://127.0.0.1:8765/api/favorites/draw` |
+| `{protocol:'file:'}` / `null` / `undefined` | `http://127.0.0.1:8765/api/favorites/draw` |
+| `{protocol:'http:',origin:'',hostname:'ex.com'}` | `http://127.0.0.1:8765/api/favorites/draw`（防 `undefined/8000`） |
+
+单文件产物 `MutipleChat.html` 重新构建后（279.7 KB），抽出打包代码在 node 里跑同样用例，
+结果与上表一致——`file://` 打开时仍回退本机地址，**离线行为零变化**。
+
+### 6.2 测试
+
+- `tests/test_chattool.mjs`：31 项通过（原 25 项 + 新增 6 项：4 组地址矩阵、
+  1 项前缀常量、1 项 `credentials` 静态断言）。
+- 其余 6 个纯逻辑套件（edgeops/geom/md/nodestyles/zone/ui_assets）全绿，无回归。
+
+### 6.3 一次「不能删断言」的判断
+
+原测试写的是：
+
+```js
+assert.match(CHATTOOL_DRAW_URL, /^http:\/\/127\.0\.0\.1:8765\/api\/favorites\/draw$/);
+```
+
+改成推导后该断言在 node 下仍能通过（无 location → 回退本机），但它锁的语义
+已经变了：从「地址恒为本机」变成「无 location 时回退本机」。
+若只是让它绿，会掩盖「服务器上到底连哪」这一核心行为。
+故改成 6 项矩阵测试，把这个常量真正要保证的东西（**按形态分支**）表达出来。
+
+### 6.4 遗留
+
+- 部署路径若不是 `/8000`，改 `js/chattool.js::CHATTOOL_PREFIX` 一行并重跑 `node build.js`。
+- `server.js` 的 `/proxy` 仍为开放代理（`Access-Control-Allow-Origin: *`，无鉴权/限流），
+  与本次无关，另行评估。
