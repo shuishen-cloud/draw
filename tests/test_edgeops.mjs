@@ -19,10 +19,10 @@ test('插入点位于两节点中心的中点', () => {
   assert.equal(p.y + p.h / 2, midY);
 });
 
-test('命令留在上游，下游为空', () => {
+test('默认（before）命令在下游，上游为空', () => {
   const p = planInsertOnEdge(src, dst, { id: 'e1', command: '🖐️总结' });
-  assert.equal(p.upstreamCommand, '🖐️总结');
-  assert.equal(p.downstreamCommand, '');
+  assert.equal(p.upstreamCommand, '');
+  assert.equal(p.downstreamCommand, '🖐️总结');
 });
 
 test('新节点继承上游区域', () => {
@@ -78,4 +78,66 @@ test('canRemoveEdge：存在即可删，不存在返回 false', () => {
   assert.equal(canRemoveEdge(edges, 'e2'), false);
   assert.equal(canRemoveEdge(edges, null), false);
   assert.equal(canRemoveEdge(null, 'e1'), false);
+});
+
+// =========================================================================
+// 插入位置：before / after（feat: node-color）
+// =========================================================================
+test('默认位置是 before：命令移到下游', () => {
+  const p = planInsertOnEdge(src, dst, { command: '🖐️总结' });
+  assert.equal(p.upstreamCommand, '');
+  assert.equal(p.downstreamCommand, '🖐️总结');
+  assert.equal(p.position, 'before');
+});
+
+test('position=after：命令留在上游', () => {
+  const p = planInsertOnEdge(src, dst, { command: '🖐️总结' }, { position: 'after' });
+  assert.equal(p.upstreamCommand, '🖐️总结');
+  assert.equal(p.downstreamCommand, '');
+  assert.equal(p.position, 'after');
+});
+
+test('position=before 显式指定与默认一致', () => {
+  const a = planInsertOnEdge(src, dst, { command: 'X' });
+  const b = planInsertOnEdge(src, dst, { command: 'X' }, { position: 'before' });
+  assert.deepEqual(a, b);
+});
+
+test('非法 position 回退为 before', () => {
+  for (const bad of ['middle', '', null, undefined, 42, {}]) {
+    const p = planInsertOnEdge(src, dst, { command: 'cmd' }, { position: bad });
+    assert.equal(p.position, 'before');
+    assert.equal(p.downstreamCommand, 'cmd');
+    assert.equal(p.upstreamCommand, '');
+  }
+});
+
+test('两种位置下命令都只会出现在一条线上（不会丢也不会重复）', () => {
+  for (const position of ['before', 'after']) {
+    const p = planInsertOnEdge(src, dst, { command: '🖐️A' }, { position });
+    const total = [p.upstreamCommand, p.downstreamCommand].filter(Boolean).length;
+    assert.equal(total, 1, 'position=' + position);
+  }
+});
+
+test('空命令时两种位置结果都是空（无副作用）', () => {
+  for (const position of ['before', 'after']) {
+    const p = planInsertOnEdge(src, dst, { command: '' }, { position });
+    assert.equal(p.upstreamCommand, '');
+    assert.equal(p.downstreamCommand, '');
+  }
+});
+
+test('位置不影响几何（只影响命令归属）', () => {
+  const before = planInsertOnEdge(src, dst, { command: 'x' }, { position: 'before' });
+  const after = planInsertOnEdge(src, dst, { command: 'x' }, { position: 'after' });
+  assert.equal(before.x, after.x);
+  assert.equal(before.y, after.y);
+  assert.equal(before.zoneId, after.zoneId);
+});
+
+test('端点缺失时 position 字段仍然回填（调用方不必判空）', () => {
+  const p = planInsertOnEdge(null, dst, { command: 'x' }, { position: 'after' });
+  assert.equal(p.valid, false);
+  assert.equal(p.position, 'after');
 });
