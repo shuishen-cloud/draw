@@ -126,14 +126,22 @@ export function appendCanvasData(raw) {
 
   // 建节点，并记下「外部节点 id -> 本地节点 id」供连边用。
   // 不能靠下标对应：去重后 kept 已经短了一层，下标会对不上。
+  // __silentImport：与 importCanvasData 同思路，批量建节点时抑制逐项副作用
+  // （否则每建一张卡都跑一次 refreshOutline / scheduleSnapshot，几十张就明显卡）。
+  // 结束后自己汇总刷新一次。
   const extToLocal = new Map();
-  for (const d of placed) {
-    const node = createNode(d.kind, {
-      title: d.title, text: d.text, src: d.src, prompt: d.prompt,
-      x: d.x, y: d.y, w: d.w, h: d.h,
-      origin: d.origin,
-    });
-    if (d.srcId) extToLocal.set(String(d.srcId), node.id);
+  HOST.__silentImport = true;
+  try {
+    for (const d of placed) {
+      const node = createNode(d.kind, {
+        title: d.title, text: d.text, src: d.src, prompt: d.prompt,
+        x: d.x, y: d.y, w: d.w, h: d.h,
+        origin: d.origin,
+      });
+      if (d.srcId) extToLocal.set(String(d.srcId), node.id);
+    }
+  } finally {
+    HOST.__silentImport = false;
   }
 
   // 外部边：ChatTool 目前只发卡片不发边，但按通用规则处理——
