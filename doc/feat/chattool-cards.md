@@ -148,3 +148,62 @@ ChatTool UI ──GET /api/favorites/draw──► {ok:true,data:{...}}
 
 - 需要 ChatTools 服务在跑；纯离线单文件版（`file://`）下 `fetch` 本机端口会被 CORS/混合内容限制，需走导出文件兜底。
 - 不做双向同步：ChatTool 里取消收藏后，画布上的卡片不会自动消失（这是刻意的——用户可能已改过卡片内容）。
+
+## 实现与校验结果
+
+### 落地清单
+
+| 文件 | 改动 |
+|---|---|
+| `js/chattool.js` | **新增**。纯逻辑：`normalizeChatToolPayload` / `mapCardsToNodes` / `dedupeByMessageId` / `planLayout`，以及常量 `CHATTOOL_DRAW_URL`、`KINDS`、`ORIGIN_SOURCE`、网格参数 |
+| `js/io2.js` | 新增 `appendCanvasData(raw)`：追加导入，不清空、不重置 `seq`、不改 `view`；`exportCanvasData` / `importCanvasData` 透传 `origin` |
+| `js/nodes.js` | `createNode()` 支持可选 `origin` 字段（默认 `null`） |
+| `js/favorites.js` | 新增 `importFromChatTool(url?)`；收藏面板挂 `#favPullChatTool` 按钮，带防连点与 toast 反馈 |
+| `js/state.js` | `window.flashToast` 暴露（见下方修复记录） |
+| `index.html` / `styles.css` | 收藏面板「📥 从 ChatTool 拉取」按钮及样式 |
+| `build.js` | `chattool.js` 加入 `ORDER`（排在 `io2.js`/`favorites.js` 之前） |
+
+### 使用方式
+
+1. 启动 ChatTool：`cd ../ChatTools && .venv/bin/python -m app`（默认 127.0.0.1:8765）
+2. 启动 draw：`node server.js`，浏览器打开 `http://localhost:8090`
+   （**必须是 http**，`file://` 下 Origin 为 `null` 会被 ChatTool 的 CORS 策略拦掉）
+3. 侧栏「⭐ 收藏」→「📥 从 ChatTool 拉取」→ 收藏作为卡片追加到当前画布
+
+第一次提示「✅ 新增 N 张卡片」；重复点同一份会提示「✅ 新增 0 张卡片，跳过 N 张（已存在）」。
+
+### 校验结果
+
+```
+tests/test_chattool.mjs          pass 19  fail 0     （新增，纯函数）
+tests/e2e_chattool_append.cjs    21 通过 / 0 失败    （新增，真实页面）
+tests/e2e_canvases_logic.cjs     37 通过 / 0 失败    （回归，未受影响）
+tests/e2e_favorites_node.cjs     41 通过 / 0 失败    （回归，未受影响）
+tests/test_geom.mjs              12 通过 / 0 失败    （回归）
+tests/test_md.mjs                21 通过 / 0 失败    （回归）
+tests/test_zone.mjs              12 通过 / 0 失败    （回归）
+```
+
+真实端到端（ChatTools 起 8765 + draw 起 8090，把两条消息置为收藏后点按钮）：
+原有 3 个节点 → 拉取后 5 个（**未清空**），`origin.messageId`/`tags` 正确写入，
+再点一次仍是 5 个，浏览器无 JS 报错。
+
+### 实现中修复的两个问题
+
+1. **`window.flashToast` 从未暴露**（既有缺陷，本次暴露出来）
+   `favorites.js` 用 `HOST.flashToast?.()` 发提示，而 `HOST` 是 `window`，
+   `state.js` 只暴露了 `DBG/state/view`。单文件打包版因所有模块共用作用域
+   恰好能拿到，所以历史 e2e 全绿；只有 **http/ESM 模式**下提示被 `?.` 静默吞掉。
+   已补 `window.flashToast = flashToast`。这个坑说明「e2e 只跑打包版」是有盲区的。
+
+2. **去重后下标错位会导致连线指错节点**
+   最初想用 `placed[idx]` ↔ `created[idx]` 按顺序建映射，但 `dedupeByMessageId`
+   会剔掉一部分，`kept` 比原数组短，下标全错。改为 `mapCardsToNodes` 带出
+   `srcId`，建节点时同步写 `extToLocal`（外部 id → 本地 id）映射表。
+
+### 刻意不做的事
+
+- **不改 `importCanvasData`**：它「整板替换」语义对「打开画布文件」是对的，
+  改它反而会破坏既有行为。
+- **不做双向同步**：ChatTool 里取消收藏后画布卡片不会消失——用户可能已改过卡片内容，
+  自动删除风险更大。
