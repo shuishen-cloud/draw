@@ -73,3 +73,56 @@ NODE_COLORS = ['gray', 'red', 'orange', 'yellow', 'green', 'blue', 'purple']
 - 任意取色器（color picker）：固定 7 色足够，且能保持整体视觉一致。
 - 卡片背景整块着色：会干扰正文阅读，只染标题栏与标记。
 - 按颜色筛选/分组：等有真实需求再说。
+
+---
+
+## 6. 实现与校验结果
+
+### 6.1 落地清单
+
+| 文件 | 改动 |
+|---|---|
+| `js/edgeops.js` | `planInsertOnEdge` 增加 `position`（默认 `before`），返回 `position` 字段；两种位置下命令只出现一次 |
+| `js/edges.js` | `insertNodeOnEdge(edgeId, kind, position)`；右键菜单两项（含副标题说明）；标签 `＋` 改为弹菜单而非直接插 |
+| `js/nodestyles.js`（新增） | `NODE_COLORS` / `normalizeColor` / `hasCustomColor` / `nextColor` 纯逻辑 |
+| `js/nodes.js` | `color` 字段、标题栏色点按钮、`openColorPalette`、`setNodeColor` |
+| `js/shortcuts.js` | `Shift+Insert`（命令后）、数字键 `1–7` 上色、`0` 恢复默认 |
+| `js/io2.js` | 导出/导入/追加导入都带 `color`（默认色时不写字段） |
+| `styles.css` | 7 组 `[data-color]` 预计算变量（不用 `color-mix`）、色点按钮、`#colorPalette`、菜单两行式 |
+| `build.js` | `nodestyles.js` 加入 ORDER |
+
+### 6.2 校验结果
+
+- 纯逻辑单测：**98 通过 / 0 失败**（新增 edgeops 8 项 + nodestyles 9 项）
+- 构建通过，产物中 `color-mix` 出现 **0** 次（兼容性确认）
+- DOM 接线实测（最小 stub 跑真实模块）：
+  ```
+  before  n4->n6(空)  |  n6->n5(总结)
+  after   n7->n9(总结) |  n9->n8(空)
+
+  设置 blue -> data-color 属性 = blue
+  非法 pink -> null（回退默认）
+  清除 -> data-color 属性 = (已移除)
+  导出 color = purple；默认色时导出不含 color 字段：true
+  ```
+- `tests/e2e_node_color.cjs`：已写（约 20 项），**因本机缺 Playwright 浏览器未执行**，
+  有浏览器环境执行 `node build.js && node tests/e2e_node_color.cjs`
+
+### 6.3 过程中的坑
+
+1. **`color-mix()` 兼容性**：旧 WebView 不支持时整条 CSS 声明失效 → 改为预计算 4 个变量。
+2. **`dataset.color = ''` 会留下空属性**：`[data-color]` 选择器仍命中 → 统一 `setAttribute`/`removeAttribute`。
+
+### 6.4 使用方式
+
+| 操作 | 路径 |
+|---|---|
+| 命令前插入 | 右键连线 →「在命令前插入节点」 / `Insert` / 标签 `＋` |
+| 命令后插入 | 右键连线 →「在命令后插入节点」 / `Shift+Insert` / 标签 `＋` |
+| 设置卡片颜色 | 点标题栏左侧色点 → 选色；或选中后按 `1`–`7`；`0` 恢复默认 |
+
+### 6.5 已知限制
+
+- 颜色是固定 7 色，无自定义取色器（保持整体视觉一致）。
+- 只染标题栏/圆点/边框/选中条，正文区保持白底。
+- 颜色不参与大纲分组与筛选。
