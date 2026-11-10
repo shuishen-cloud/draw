@@ -649,8 +649,8 @@
   .fav-bar .spacer { flex: 1; }
   .fav-bar button.ghost { padding: 2px 8px; font-size: 14px; }
   /* 从 ChatTool 拉取：文字按钮，比 × 小一号以免挤压标题 */
-  #favPullChatTool { font-size: 12px !important; white-space: nowrap; }
-  #favPullChatTool:disabled { opacity: .55; cursor: default; }
+  #favPullChatTool, #favPullAll { font-size: 12px !important; white-space: nowrap; }
+  #favPullChatTool:disabled, #favPullAll:disabled { opacity: .55; cursor: default; }
   #favList {
     flex: 0 0 auto; max-height: 42%; overflow-y: auto;
     border-bottom: 1px solid #eceef1;
@@ -795,6 +795,13 @@
   #outline.collapsed .ol-body, #outline.collapsed .ol-head,
   #sidebar.collapsed .sb-body, #sidebar.collapsed .sb-head { display: flex; }
   #outline.collapsed .ol-body, #sidebar.collapsed .sb-body { display: block; }
+
+  /* 折叠/展开按钮必须高于侧栏浮层（z-index:50）。
+     真实事故：#toggleOutline/#toggleSidebar 原本只有 z-index:31，位置在
+     left/right:16px; top:16px —— 恰好落在侧栏头部（.ol-tabs / .sb-head）上方。
+     侧栏展开后按钮被盖住，elementFromPoint 命中的是 .ol-tab 而不是按钮，
+     于是“一展开就再也收不回去”。只提层级、不改位置。 */
+  #toggleOutline, #toggleSidebar { z-index: 51; }
 
   /* 工具栏：缩小、允许换行、贴左上角 */
   /* 平板/中等宽度：工具栏全宽贴底，按钮横向滚动，避免被挤成竖排 */

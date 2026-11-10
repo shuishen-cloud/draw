@@ -161,3 +161,67 @@ export function planLayout(descs, existingNodes = []) {
     return { ...d, w, h, x, y };
   });
 }
+
+// =========================================================================
+// 收藏条目（收件箱模式）
+// =========================================================================
+// 拉取到的卡片不直接落画布，而是先写成收藏条目（kind='chattool'），
+// 用户在收藏面板里预览、逐条或批量导入。理由见 doc/feat/chattool-inbox.md：
+// 「先看有什么、再决定放哪些」比「一下子铺满画布」更可控。
+//
+// id 必须**可重现**：由 messageId 派生，同一张卡重复拉取能命中同一个 id，
+// 收藏库的去重才成立。不能用时间戳或自增序号。
+
+/**
+ * 由 messageId 生成稳定的收藏 id。
+ * 没有 messageId（自由笔记）时退回内容摘要，同内容仍能去重。
+ */
+export function favoriteIdOf(desc) {
+  const mid = desc?.origin?.messageId;
+  const basis = mid ? 'm:' + mid : 't:' + (desc?.title || '') + '|' + (desc?.text || '');
+  // 简易 32 位哈希（FNV-1a），够用于「同一张卡得同一 id」
+  let h = 0x811c9dc5;
+  for (let i = 0; i < basis.length; i++) {
+    h ^= basis.charCodeAt(i);
+    h = Math.imul(h, 0x01000193) >>> 0;
+  }
+  return 'fct-' + h.toString(36) + '-' + basis.length.toString(36);
+}
+
+/**
+ * 待建节点描述 → FavoriteItem（与 node 收藏的 data 形状对齐，
+ * 以便 restoreNode 直接复用）。
+ */
+export function toFavoriteItems(descs) {
+  if (!Array.isArray(descs) || !descs.length) return [];
+  const now = new Date().toISOString();
+  return descs.map((d) => {
+    const origin = d.origin || null;
+    const snippet = String(d.text || '').replace(/\s+/g, ' ').trim().slice(0, 18);
+    const name = d.title || origin?.convTitle || snippet || 'ChatTool 卡片';
+    return {
+      id: favoriteIdOf(d),
+      kind: 'chattool',
+      name,
+      createdAt: now,
+      meta: {
+        convTitle: origin?.convTitle || '',
+        role: origin?.role || '',
+        tags: origin?.tags || [],
+        messageId: origin?.messageId || '',
+        favoriteAt: origin?.favoriteAt || '',
+        chars: (d.text || '').length + (d.prompt || '').length,
+      },
+      data: {
+        kind: d.kind,
+        title: name,
+        text: d.text || '',
+        src: d.src || '',
+        prompt: d.prompt || '',
+        w: d.w,
+        h: d.h,
+        origin,
+      },
+    };
+  });
+}

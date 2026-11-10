@@ -66,6 +66,16 @@ const hitAt = (sel) => `(() => {
   return (owner ? owner.id : el.tagName);
 })()`;
 
+// 等待某个侧栏的 collapsed 状态变成期望值（class 切换是同步的，
+// 但 transition 会让「视觉上」滞后；这里只看 class，故无需定时长）。
+async function waitCollapsed(page, id, want) {
+  await page.waitForFunction(
+    ([i, w]) => document.getElementById(i).classList.contains('collapsed') === w,
+    [id, want],
+    { timeout: 3000 },
+  );
+}
+
 async function probe(browser, width, height) {
   const ctx = await browser.newContext({ viewport: { width, height } });
   const page = await ctx.newPage();
@@ -74,6 +84,15 @@ async function probe(browser, width, height) {
 
   const tag = `${width}x${height}`;
   console.log(`\n[${tag}]`);
+
+  // 基线：窄屏（<=1024px）启动时自动折叠两侧栏，桌面则展开。
+  // 测试必须主动把两边摆到“已收起”再开始，否则第一次点击方向就相反。
+  await page.evaluate(() => {
+    document.getElementById('outline').classList.add('collapsed');
+    document.getElementById('sidebar').classList.add('collapsed');
+  });
+  await waitCollapsed(page, 'outline', true);
+  await waitCollapsed(page, 'sidebar', true);
 
   // ---- 折叠态：两个按钮都该可点 ----
   check(`${tag} 折叠态 #toggleOutline 可命中`,
@@ -85,7 +104,7 @@ async function probe(browser, width, height) {
 
   // ---- 大纲：展开 → 再点应收起 ----
   await page.click('#toggleOutline');
-  await page.waitForTimeout(320);
+  await waitCollapsed(page, 'outline', false);
   const oExpanded = await page.evaluate(() =>
     !document.getElementById('outline').classList.contains('collapsed'));
   check(`${tag} 大纲已展开`, oExpanded === true);
@@ -94,14 +113,14 @@ async function probe(browser, width, height) {
     await page.evaluate(hitAt('#toggleOutline')));
 
   await page.click('#toggleOutline');
-  await page.waitForTimeout(320);
+  await waitCollapsed(page, 'outline', true);
   const oCollapsed = await page.evaluate(() =>
     document.getElementById('outline').classList.contains('collapsed'));
   check(`${tag} 大纲可收回`, oCollapsed === true);
 
   // ---- 对话：展开 → 再点应收起 ----
   await page.click('#toggleSidebar');
-  await page.waitForTimeout(320);
+  await waitCollapsed(page, 'sidebar', false);
   const sExpanded = await page.evaluate(() =>
     !document.getElementById('sidebar').classList.contains('collapsed'));
   check(`${tag} 对话栏已展开`, sExpanded === true);
@@ -110,18 +129,20 @@ async function probe(browser, width, height) {
     await page.evaluate(hitAt('#toggleSidebar')));
 
   await page.click('#toggleSidebar');
-  await page.waitForTimeout(320);
+  await waitCollapsed(page, 'sidebar', true);
   const sCollapsed = await page.evaluate(() =>
     document.getElementById('sidebar').classList.contains('collapsed'));
   check(`${tag} 对话栏可收回`, sCollapsed === true);
 
   // ---- 两侧同时展开再同时收起（用户实际最常触发的路径）----
   await page.click('#toggleOutline');
+  await waitCollapsed(page, 'outline', false);
   await page.click('#toggleSidebar');
-  await page.waitForTimeout(320);
+  await waitCollapsed(page, 'sidebar', false);
   await page.click('#toggleOutline');
+  await waitCollapsed(page, 'outline', true);
   await page.click('#toggleSidebar');
-  await page.waitForTimeout(320);
+  await waitCollapsed(page, 'sidebar', true);
   const both = await page.evaluate(() => ({
     o: document.getElementById('outline').classList.contains('collapsed'),
     s: document.getElementById('sidebar').classList.contains('collapsed'),

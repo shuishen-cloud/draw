@@ -17,7 +17,10 @@ import {
 import { refreshOutline } from './outline.js';
 import { boundsOf, centerOffset, pickSubgraph } from './subgraph.js';
 import { appendCanvasData } from './io2.js';
-import { CHATTOOL_DRAW_URL } from './chattool.js';
+import {
+  CHATTOOL_DRAW_URL, ORIGIN_SOURCE,
+  mapCardsToNodes, normalizeChatToolPayload, toFavoriteItems,
+} from './chattool.js';
 
 let favSeq = 0;
 
@@ -95,7 +98,7 @@ export async function listFavoriteNodes() {
   const store = await openStore();
   const all = await store.getAll(STORE_ITEMS);
   return all
-    .filter(x => x && (x.kind === 'node' || x.kind === 'subgraph'))
+    .filter(x => x && (x.kind === 'node' || x.kind === 'subgraph' || x.kind === 'chattool'))
     // kind 过滤：旧的 node 收藏保持原样，子图收藏一并列出
     .sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)));
 }
@@ -153,6 +156,9 @@ export async function restoreNode(id, pos = {}) {
     w, h,
     x: Math.round(cx - w / 2),
     y: Math.round(cy - h / 2),
+    // 来自 ChatTool 的收藏带 origin：不传的话逐条导入会丢失来源，
+    // 再次导入就无法按 messageId 去重（会叠出重复卡片）。
+    origin: d.origin || null,
   });
 
   selectNode(node.id);
@@ -360,6 +366,12 @@ export async function refreshFavoritesPanel() {
       sub = `⬚ 子图 · ${it.meta?.nodeCount || 0} 节点 / ${it.meta?.edgeCount || 0} 连线`
           + (it.meta?.hasImage ? ' · 图片' : '')
           + ` · ${fmtTime(it.createdAt)}`;
+    } else if (it.kind === 'chattool') {
+      // 来自 ChatTool 的收件箱条目：突出「来源会话 · 角色 · 标签」
+      const src = it.meta?.convTitle ? `《${it.meta.convTitle}》` : 'ChatTool';
+      const role = it.meta?.role ? ` · ${it.meta.role}` : '';
+      const tags = it.meta?.tags?.length ? ` · ${it.meta.tags.join('、')}` : '';
+      sub = `💬 ${src}${role}${tags} · ${it.meta?.chars || 0} 字`;
     } else {
       const kind = KIND_LABEL[it.meta?.nodeKind] || it.meta?.nodeKind || '节点';
       sub = `${kind}${it.meta?.hasImage ? ' · 图片' : ''} · ${it.meta?.chars || 0} 字 · ${fmtTime(it.createdAt)}`;
@@ -422,6 +434,12 @@ export async function showFavorite(id) {
       <span class="spacer"></span>
       <button id="favImport">⬇ 导入到画布</button>
     </div>
+    ${item.kind === 'chattool' ? `<div class="fav-sub-line">💬 来自 ChatTool`
+      + (item.meta?.convTitle ? ` · 《${escapeHtml(item.meta.convTitle)}》` : '')
+      + (item.meta?.role ? ` · ${escapeHtml(item.meta.role)}` : '')
+      + (item.meta?.tags?.length ? ` · ${escapeHtml(item.meta.tags.join('、'))}` : '')
+      + (item.meta?.favoriteAt ? ` · ${escapeHtml(fmtTime(item.meta.favoriteAt))}` : '')
+      + `</div>` : ''}
     <div class="fav-body">${bodyHtml}</div>
   `;
 
@@ -545,6 +563,11 @@ function toast(msg) {
 // ---- 从上层 ChatTool 拉取收藏卡片（追加到当前画布）----
 // 与「⬇ 导入收藏」不同：这里是跨应用拉取，且**不清空**当前画布。
 // 失败时给出可操作退路：ChatTool 未启动 / 端口不同 / 纯离线版。
+// ---- 从上层 ChatTool 拉取收藏卡片（收件箱模式）----
+// 关键变化（v2）：拉取**不直接落画布**，而是先写成收藏条目（kind='chattool'），
+// 用户在收藏面板里预览、逐条或批量导入。理由：直接铺满画布会把整理好的布局推乱，
+// 而且删错了以后 origin 也丢了、再拉一次全部重来。
+
 export async function importFromChatTool(url = CHATTOOL_DRAW_URL) {
   let raw;
   try {
@@ -558,8 +581,119 @@ export async function importFromChatTool(url = CHATTOOL_DRAW_URL) {
       : e.message;
     throw new Error(hint);
   }
+  return pullChatToolToFavorites(raw);
+}
 
-  const res = appendCanvasData(raw);        // 非法数据会在这里抛错
+/**
+ * 把 ChatTool 的返回体写入收藏库（不动画布）。
+ * 第二个参数用于测试注入 payload（不传则按 payloadOrUrl 当作数据）。
+ * 返回 {added, skipped}。
+ */
+export async function pullChatToolToFavorites(payloadOrUrl, maybePayload) {
+  let raw = maybePayload;
+  if (raw === undefined) {
+    if (typeof payloadOrUrl === 'string') return importFromChatTool(payloadOrUrl);
+    raw = payloadOrUrl;
+  }
+
+  const payload = normalizeChatToolPayload(raw);         // 非法数据在这里抛错
+  const descs = mapCardsToNodes(payload);
+  const items = toFavoriteItems(descs);
+
+  if (!items.length) {
+    DBG.log('ChatTool 拉取：没有卡片');
+    return { added: 0, skipped: 0 };
+  }
+
+  const store = await openStore();
+  const all = await store.getAll(STORE_ITEMS);
+  // 去重口径：与收藏库已有条目比，不看画布（画布是另一个层次）
+  const existing = new Set(
+    all.filter(x => x && x.kind === 'chattool' && x.meta?.messageId)
+       .map(x => String(x.meta.messageId)),
+  );
+  // 同时按 id 去重，兼容没有 messageId 的自由笔记
+  const existingIds = new Set(all.filter(x => x && x.id).map(x => x.id));
+
+  let added = 0, skipped = 0;
+  for (const it of items) {
+    const mid = it.meta?.messageId;
+    if ((mid && existing.has(String(mid))) || existingIds.has(it.id)) { skipped++; continue; }
+    try {
+      await store.put(STORE_ITEMS, it);
+      added++;
+      if (mid) existing.add(String(mid));
+      existingIds.add(it.id);
+    } catch (e) {
+      // 典型是 localStorage 降级路径下超限。已写入的保留，不全部回退。
+      DBG.err('收藏写入失败（已写入', added, '条）：', e);
+      throw new Error(`收藏库写入失败（已成功 ${added} 条）：${e.message}`);
+    }
+  }
+
+  if (added) await refreshFavoritesPanel();
+  DBG.log('从 ChatTool 拉取到收藏：新增', added, '条，跳过', skipped, '条（已在收藏里）');
+  return { added, skipped };
+}
+
+/** 收藏库里所有 chattool 条目（新的在前）。 */
+export async function listChatToolFavorites() {
+  const store = await openStore();
+  const all = await store.getAll(STORE_ITEMS);
+  return all
+    .filter(x => x && x.kind === 'chattool')
+    .sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)));
+}
+
+/** 清空 chattool 收藏（供测试与重置用）。返回删除条数。 */
+export async function clearChatToolFavorites() {
+  const store = await openStore();
+  const list = await listChatToolFavorites();
+  for (const it of list) await store.delete(STORE_ITEMS, it.id);
+  if (list.length) await refreshFavoritesPanel();
+  return list.length;
+}
+
+/**
+ * 把收藏库里所有 chattool 条目一次导入到当前画布。
+ * 走 appendCanvasData：它自带「与画布节点按 messageId 去重」，
+ * 所以重复点不会在画布上叠出第二份。
+ */
+export async function importAllChatToolFavorites() {
+  const items = await listChatToolFavorites();
+  if (!items.length) return { added: 0, skipped: 0 };
+
+  const payload = {
+    format: 'mutiplechat-canvas',
+    version: 1,
+    nodes: [],
+    edges: [],
+    zones: [],
+    tasks: [],
+    draw_cards: [],
+  };
+  items.forEach((it, i) => {
+    const nid = 'ct' + i;
+    const d = it.data || {};
+    payload.nodes.push({
+      id: nid, kind: d.kind, title: d.title || it.name,
+      x: 0, y: 0, w: d.w, h: d.h,
+      text: d.text, src: d.src, prompt: d.prompt,
+    });
+    payload.draw_cards.push({
+      nodeId: nid,
+      messageId: it.meta?.messageId || '',
+      convId: d.origin?.convId || '',
+      convTitle: it.meta?.convTitle || '',
+      role: it.meta?.role || '',
+      tags: it.meta?.tags || [],
+      favoriteAt: it.meta?.favoriteAt || '',
+      source: ORIGIN_SOURCE,
+    });
+  });
+
+  const res = appendCanvasData(payload);
+  DBG.log('全部导入：', res);
   return res;
 }
 
@@ -609,13 +743,36 @@ export function bindFavorites() {
     try {
       const { added, skipped } = await importFromChatTool();
       if (!added && !skipped) toast('ChatTool 里还没有收藏');
-      else toast(`✅ 新增 ${added} 张卡片` + (skipped ? `，跳过 ${skipped} 张（已存在）` : ''));
+      else if (!added) toast(`已是最新，${skipped} 条都在收藏里`);
+      else toast(`✅ 已收进收藏 ${added} 条` + (skipped ? `，跳过 ${skipped} 条（已存在）` : '')
+        + '，点条目右侧「⬇」导入到画布');
     } catch (err) {
       DBG.err('从 ChatTool 拉取失败：', err);
       toast('❌ ' + err.message);
     } finally {
       pullBtn.disabled = false;
       pullBtn.textContent = oldText;
+    }
+  });
+
+  // 一次性把收藏库里所有 ChatTool 条目导入到画布
+  const pullAllBtn = el('favPullAll');
+  pullAllBtn?.addEventListener('click', async () => {
+    if (pullAllBtn.disabled) return;
+    pullAllBtn.disabled = true;
+    const oldText = pullAllBtn.textContent;
+    pullAllBtn.textContent = '⏳ 导入中…';
+    try {
+      const { added, skipped } = await importAllChatToolFavorites();
+      if (!added && !skipped) toast('收藏里还没有来自 ChatTool 的卡片');
+      else if (!added) toast(`已在画布上，跳过 ${skipped} 张`);
+      else toast(`✅ 已导入 ${added} 张卡片到画布` + (skipped ? `，跳过 ${skipped} 张（已在画布）` : ''));
+    } catch (err) {
+      DBG.err('全部导入失败：', err);
+      toast('❌ ' + err.message);
+    } finally {
+      pullAllBtn.disabled = false;
+      pullAllBtn.textContent = oldText;
     }
   });
 
