@@ -169,7 +169,9 @@ function check(name, cond, extra = '') {
   console.log('\n[7] 切换画布会清空对话（避免上下文串到另一张图）');
   const chatCleared = await page.evaluate(() => {
     addMsg('assistant', '上一张画布的对话', '助手');
-    const before = document.getElementById('msgs').children.length;
+    // 只数气泡：容器里还住着空态引导 #chatEmpty（不是对话内容）
+    const countMsgs = () => document.querySelectorAll('#msgs .msg').length;
+    const before = countMsgs();
     const first = listCanvases()[0].id;
     const other = listCanvases()[1]?.id || createCanvas('临时');
     switchCanvas(other);
@@ -178,7 +180,7 @@ function check(name, cond, extra = '') {
     const sel = document.getElementById('canvasPicker');
     sel.value = first;
     sel.dispatchEvent(new Event('change'));
-    return { before, after: document.getElementById('msgs').children.length };
+    return { before, after: countMsgs() };
   });
   check('切换前有对话', chatCleared.before > 0, String(chatCleared.before));
   check('切换后对话已清空', chatCleared.after === 0, String(chatCleared.after));

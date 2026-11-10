@@ -151,7 +151,7 @@ const EMOJI_RE = /[\u{1F000}-\u{1FAFF}\u{2190}-\u{21FF}\u{2300}-\u{23FF}\u{25A0}
     HOST.syncEmptyHint();
     const a = createNode('doc', { x: 100, y: 100 });
     const b = createNode('doc', { x: 400, y: 100 });
-    createEdge(a.id, b.id);
+    addEdge(a.id, b.id);
     selectNode(a.id);
     return { before: Object.keys(state.nodes).length, beforeEdges: Object.keys(state.edges).length, id: a.id };
   });
@@ -204,8 +204,11 @@ const EMOJI_RE = /[\u{1F000}-\u{1FAFF}\u{2190}-\u{21FF}\u{2300}-\u{23FF}\u{25A0}
     clearCanvas();
     const a = createNode('doc', { x: 100, y: 100 });
     selectNode(a.id);
+    // 节点默认是预览态，编辑区（textarea）处于 hidden 中，无法 focus；
+    // 这里先切回编辑态再聚焦，模拟用户正在输入
+    setNodeMode(a, 'edit');
     const ta = document.querySelector('#node-' + a.id + ' textarea');
-    if (ta) ta.focus();
+    ta.focus();
     return { id: a.id, focused: document.activeElement.tagName };
   });
   await page.keyboard.press('Backspace');
@@ -218,7 +221,7 @@ const EMOJI_RE = /[\u{1F000}-\u{1FAFF}\u{2190}-\u{21FF}\u{2300}-\u{23FF}\u{25A0}
     clearCanvas();
     const a = createNode('doc', { x: 100, y: 100 });
     const b = createNode('doc', { x: 400, y: 300 });
-    const e = createEdge(a.id, b.id);
+    const e = addEdge(a.id, b.id);
     redrawEdges();
     const el = state.edges[e.id].labelEl;
     return { text: el.textContent, title: el.getAttribute('title') || '', placeholder: el.classList.contains('placeholder') };
