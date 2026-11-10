@@ -15,6 +15,7 @@ import { createNode, selectNode } from './nodes.js';
 import { refreshLevelFilter, refreshOutline } from './outline.js';
 import { runAll, runSelection } from './run.js';
 import { bindShortcuts } from './shortcuts.js';
+import { bringToFront, bindFloatingPanel, bindToolbar } from './floating.js';
 import { createTask, loadTasks, refreshTasks, switchOlTab } from './tasks.js';
 import { applyView, canvasEl, centerContent, fitToContent, screenToWorld, zoomAt } from './viewport.js';
 import { createZone } from './zones.js';
@@ -27,19 +28,6 @@ import {
 // =========================================================================
 // 12.0 多画布：选择器 + 管理菜单
 // =========================================================================
-
-// 窄屏抽屉互斥：两侧栏各占 78vw，同时展开必然互相遮挡（共 156vw），
-// 后开的会盖住先开的头部，连自己的 ✕ 都点不到。抽屉本就是互斥交互，
-// 所以打开一侧时自动收起另一侧。
-// 定义在模块顶层，供 main.js 与 chat.js（bindSidebar）共同使用。
-HOST.closeDrawerOthers = (except) => {
-  if (!HOST.matchMedia || !HOST.matchMedia('(max-width: 1024px)').matches) return;
-  for (const id of ['outline', 'sidebar']) {
-    if (id === except) continue;
-    const el = document.getElementById(id);
-    if (el) el.classList.add('collapsed');
-  }
-};
 
 // 把仓库里的画布清单同步到 <select>
 function refreshCanvasPicker() {
@@ -77,6 +65,8 @@ function bindCanvasPicker() {
   const menuBtn = document.getElementById('canvasMenu');
   const panel = document.getElementById('canvasPanel');
   if (!sel || !menuBtn || !panel) return;
+  // 管理浮层是工具栏的弹出层：打开时把工具栏提到最前，否则会被上方浮窗盖住
+  bringToFront(document.getElementById('toolbar'));
 
   // ---- 切换 ----
   sel.addEventListener('change', () => {
@@ -329,21 +319,26 @@ function init() {
   });
   // 触摸设备主入口：运行当前选中的连线 / 节点
   document.getElementById('runSel').addEventListener('click', () => runSelection());
-  // ---- 窄屏抽屉互斥 ----
-  document.getElementById('toggleOutline').addEventListener('click', () => {
-    const el = document.getElementById('outline');
-    el.classList.toggle('collapsed');
-    if (!el.classList.contains('collapsed')) HOST.closeDrawerOthers?.('outline');
-    requestAnimationFrame(() => { redrawEdges(); drawMiniMap(); });
+  // ---- 悬浮面板：大纲 / 对话 / 工具栏 ----
+  // 三者共用 bindFloatingPanel：拖头部移动 + 位置持久化 + 折叠。
+  // 侧栏不再占文档流，画布始终满宽，因此无需再处理「互斥 / 收回」问题。
+  bindFloatingPanel(document.getElementById('outline'), {
+    handle: document.querySelector('#outline .ol-tabs'),
+    key: 'outline',
+    foldBtn: document.getElementById('olClose'),
   });
-
-  // 窄屏抽屉的收起按钮（展开时外部 toggle 会隐藏，靠这个收回）
-  const collapsePanel = (id) => {
-    document.getElementById(id).classList.add('collapsed');
-    requestAnimationFrame(() => { redrawEdges(); drawMiniMap(); });
+  bindFloatingPanel(document.getElementById('sidebar'), {
+    handle: document.querySelector('#sidebar .sb-head'),
+    key: 'sidebar',
+    foldBtn: document.getElementById('sbClose'),
+  });
+  bindToolbar();
+  // 测试/调试用：把三块浮窗收起来，露出干净画布（e2e 断言节点几何时需要）
+  HOST.hideFloatingPanels = () => {
+    for (const el of document.querySelectorAll('#outline, #sidebar, #toolbar, #toolbarFab')) {
+      el.style.display = 'none';
+    }
   };
-  document.getElementById('olClose')?.addEventListener('click', () => collapsePanel('outline'));
-  document.getElementById('sbClose')?.addEventListener('click', () => collapsePanel('sidebar'));
 
   // ---- 视口控件 ----
   // 缩放锚点统一取「可见容器中心」：
@@ -509,12 +504,9 @@ function init() {
 
   window.addEventListener('resize', () => { redrawEdges(); drawMiniMap(); });
 
-  // ---- 移动端/窄屏：默认折叠两侧栏，画布占满屏幕 ----
-  if (window.matchMedia('(max-width: 1024px)').matches) {
-    document.getElementById('outline').classList.add('collapsed');
-    document.getElementById('sidebar').classList.add('collapsed');
-    requestAnimationFrame(() => { redrawEdges(); drawMiniMap(); });
-  }
+  // 浮窗位置首次夹紧已在 bindFloatingPanel 的 rAF 里完成；
+  // 这里只保证折叠/展开后连线不错位（画布尺寸未变，但面板可能遮住内容）。
+  requestAnimationFrame(() => { redrawEdges(); drawMiniMap(); });
 
   DBG.log('初始化完成。左侧：大纲/任务；Alt+Enter 运行；区域=大纲层级。');
 }

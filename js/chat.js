@@ -233,14 +233,8 @@ export function bindSidebar() {
   });
   document.getElementById('clearChat').addEventListener('click', clearChat);
   bindChatEmpty();
-  document.getElementById('toggleSidebar').addEventListener('click', () => {
-    const el = document.getElementById('sidebar');
-    el.classList.toggle('collapsed');
-    // 窄屏抽屉互斥：打开对话栏时收起大纲栏（否则两者各 78vw 互相遮挡）
-    if (!el.classList.contains('collapsed')) HOST.closeDrawerOthers?.('sidebar');
-    // 布局变化后要重画（画布宽度改变会影响连线坐标）
-    requestAnimationFrame(() => { redrawEdges(); drawMiniMap(); });
-  });
+  // 对话栏现在是可拖拽浮窗，折叠/拖拽统一由 floating.js 处理，
+  // 这里不再需要 toggleSidebar / 抽屉互斥逻辑。
 }
 
 // 清空对话历史（切换画布时也要清：否则上下文会串到另一张图上）
