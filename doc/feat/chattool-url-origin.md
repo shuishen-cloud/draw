@@ -163,3 +163,15 @@ assert.match(CHATTOOL_DRAW_URL, /^http:\/\/127\.0\.0\.1:8765\/api\/favorites\/dr
 - 部署路径若不是 `/8000`，改 `js/chattool.js::CHATTOOL_PREFIX` 一行并重跑 `node build.js`。
 - `server.js` 的 `/proxy` 仍为开放代理（`Access-Control-Allow-Origin: *`，无鉴权/限流），
   与本次无关，另行评估。
+
+### 6.5 提交索引
+
+| 阶段 | commit | 内容 |
+|---|---|---|
+| doc | `39b1de0` | 设计规格（三种运行形态、判定规则、前缀取舍） |
+| test | `e1f39f9` | 6 项矩阵测试（当时因导出不存在而红，符合预期） |
+| feat | `1a7aa04` | `resolveChatToolUrl` + 前缀常量 + `credentials:'include'` |
+| fix | `9f76f2a` | 实测矩阵、打包产物验证、遗留项 |
+
+笔记：`1a7aa04` 记 2 条——高风险的「127.0.0.1 不能当服务端地址」坑，
+以及「draw 侧前缀硬编码为常量」的可控异常取舍。
