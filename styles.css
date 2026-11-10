@@ -577,6 +577,45 @@
      再塞一个按钮会把标题挤到极小，导致「点标题栏中心拖不动」回归。
      故绝对定位到左侧颜色圆点上，hover 时覆盖显示。 */
   .node .bar { position: relative; }
+
+  /* ---------- 卡片配色 ----------
+     只染「身份色」：标题栏淡底 + 圆点 + 选中竖条 + 细边框；
+     正文区保持白底，避免影响阅读（见 doc/feat/node-color.md §2.2）。
+     每种颜色预计算 4 个值，不用 color-mix()：旧 WebView 不支持时
+     整条声明会被丢弃，颜色静默失效（开发机 Chrome 看不出来）。 */
+  .node[data-color="gray"]   { --nc: #64748b; --nc-weak: #f1f5f9; --nc-ink: #334155; --nc-line: #cbd5e1; }
+  .node[data-color="red"]    { --nc: #dc2626; --nc-weak: #fef2f2; --nc-ink: #991b1b; --nc-line: #fca5a5; }
+  .node[data-color="orange"] { --nc: #ea580c; --nc-weak: #fff7ed; --nc-ink: #9a3412; --nc-line: #fdba74; }
+  .node[data-color="yellow"] { --nc: #ca8a04; --nc-weak: #fefce8; --nc-ink: #854d0e; --nc-line: #fde047; }
+  .node[data-color="green"]  { --nc: #16a34a; --nc-weak: #f0fdf4; --nc-ink: #166534; --nc-line: #86efac; }
+  .node[data-color="blue"]   { --nc: #2563eb; --nc-weak: #eff6ff; --nc-ink: #1e40af; --nc-line: #93c5fd; }
+  .node[data-color="purple"] { --nc: #7c3aed; --nc-weak: #f5f3ff; --nc-ink: #5b21b6; --nc-line: #c4b5fd; }
+  .node[data-color] { border-color: var(--nc-line); }
+  .node[data-color] .bar { background: var(--nc-weak); }
+  .node[data-color] .bar .title { color: var(--nc-ink); }
+  .node[data-color] .dot { background: var(--nc); }
+  .node[data-color].selected::before { background: var(--nc); }
+
+  /* 标题栏上的颜色按钮：一个小色点。
+     必须给显式尺寸 —— 之前这段样式漏写，按钮尺寸为 0，点了没反应。 */
+  .node .node-color {
+    position: absolute; left: 4px; top: 50%; transform: translateY(-50%);
+    width: 14px; height: 14px; min-width: 14px; padding: 0;
+    border-radius: 50%; border: 1.5px solid transparent;
+    cursor: pointer; opacity: 0; transition: opacity .15s; z-index: 3;
+    background: var(--nc, #c3c6cb);
+  }
+  .node:hover .node-color,
+  .node.selected .node-color { opacity: 1; }
+  .node .node-color:hover { border-color: var(--ink-3); }
+  /* 未设自定义色：空心圈 + 中间灰点，提示「还没上色」 */
+  .node .node-color:not(.custom) {
+    background: transparent; border-color: #b9bbc3;
+  }
+  .node .node-color:not(.custom)::after {
+    content: ''; position: absolute; inset: 3px; border-radius: 50%;
+    background: #b9bbc3;
+  }
   .node .bar .fav-node {
     position: absolute; left: 4px; top: 50%; transform: translateY(-50%);
     width: 14px; height: 14px; padding: 0; line-height: 1;

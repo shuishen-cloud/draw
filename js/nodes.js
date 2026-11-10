@@ -475,18 +475,25 @@ function openColorPalette(node, anchor) {
       .join('')
       + '<button type="button" class="cp-clear" data-color="">跟随类型默认</button>';
     document.body.appendChild(pop);
+    // 用 mousedown 而不是 click：pointerdown 的捕获阶段会先于面板内部
+    // 的 click 触发，如果在捕获阶段就 hidden=true，面板被隐藏后
+    // click 目标已脱离文档，closest('button') 拿到 null → 颜色永远不会切换。
+    // 这里统一在冒泡阶段用 click，并且只在「点到面板外」时关闭。
     pop.addEventListener('click', (e) => {
       const b = e.target.closest('button');
       if (!b) return;
+      e.preventDefault();
       const n = state.nodes[pop.dataset.node];
       if (n) setNodeColor(n.id, b.dataset.color || null);
       pop.hidden = true;
     });
-    document.addEventListener('pointerdown', (e) => {
-      if (!pop.hidden && !pop.contains(e.target) && !e.target.closest('.node-color')) {
-        pop.hidden = true;
-      }
-    }, true);
+    // 外部点击关闭：冒泡阶段，且必须排除「面板内」与「当前节点的色点按钮」
+    document.addEventListener('click', (e) => {
+      if (pop.hidden) return;
+      if (pop.contains(e.target)) return;
+      if (e.target.closest?.('.node-color')) return;
+      pop.hidden = true;
+    });
     document.addEventListener('keydown', (e) => {
       if (e.key === 'Escape' && !pop.hidden) pop.hidden = true;
     });
