@@ -596,37 +596,40 @@
   .node[data-color] .dot { background: var(--nc); }
   .node[data-color].selected::before { background: var(--nc); }
 
-  /* 标题栏上的颜色按钮：一个小色点。
-     必须给显式尺寸 —— 之前这段样式漏写，按钮尺寸为 0，点了没反应。 */
-  .node .node-color {
-    position: absolute; left: 4px; top: 50%; transform: translateY(-50%);
-    width: 14px; height: 14px; min-width: 14px; padding: 0;
-    border-radius: 50%; border: 1.5px solid transparent;
-    cursor: pointer; opacity: 0; transition: opacity .15s; z-index: 3;
-    background: var(--nc, #c3c6cb);
-  }
-  .node:hover .node-color,
-  .node.selected .node-color { opacity: 1; }
-  .node .node-color:hover { border-color: var(--ink-3); }
-  /* 未设自定义色：空心圈 + 中间灰点，提示「还没上色」 */
-  .node .node-color:not(.custom) {
-    background: transparent; border-color: #b9bbc3;
-  }
-  .node .node-color:not(.custom)::after {
-    content: ''; position: absolute; inset: 3px; border-radius: 50%;
-    background: #b9bbc3;
-  }
+  /* ---------- 标题栏的两个小按钮：颜色 + 收藏 ----------
+     之前两者都用 position:absolute; left:4px; top:50% 叠在同一个位置，
+     结果「收藏」把「颜色」整个盖住 —— 表现为「点了不出调色板」和
+     「有的节点没有颜色选项」（其实是被盖住了）。
+     现在改成正常文档流里的 flex 项：各占 14px，永不重叠，也不需要
+     hover 才显示（触摸设备没有 hover，根本不可能点出来）。 */
+  .node .node-color,
   .node .bar .fav-node {
-    position: absolute; left: 4px; top: 50%; transform: translateY(-50%);
-    width: 14px; height: 14px; padding: 0; line-height: 1;
-    font-size: 10px; border-radius: 4px; opacity: 0; transition: opacity .15s;
-    z-index: 2;
+    position: static; flex: none;
+    width: 15px; height: 15px; min-width: 15px; padding: 0;
+    line-height: 1; border-radius: 50%; border: 0;
+    cursor: pointer; opacity: 1; transition: transform .12s, background-color .12s;
+    display: inline-flex; align-items: center; justify-content: center;
+    background: transparent;
   }
-  .node:hover .bar .fav-node,
-  .node.selected .bar .fav-node { opacity: 1; }
-  .node .bar .fav-node:hover { background: #fef3c7; }
+  /* 颜色按钮：实心圆 = 已上色；空心圈 = 跟随类型默认 */
+  .node .node-color {
+    background: var(--nc, #c3c6cb);
+    box-shadow: inset 0 0 0 1.5px rgba(255,255,255,.9);
+  }
+  .node .node-color:not(.custom) {
+    background: transparent;
+    box-shadow: inset 0 0 0 1.5px #b9bbc3;
+  }
+  .node .node-color:hover { transform: scale(1.18); }
+  /* 收藏按钮：星形字符，默认淡灰，收藏过/悬停变亮 */
+  .node .bar .fav-node {
+    color: #b9bbc3; font-size: 11px;
+  }
+  .node .bar .fav-node:hover { background: #fef3c7; color: #d97706; }
   .node .bar:active { cursor: grabbing; }
-  .node .dot { width: 9px; height: 9px; border-radius: 50%; background: #c3c6cb; flex: none; }
+  /* .dot 已由可点击的 .node-color 取代（两者外观一致但后者能点），
+     保留选择器只为兼容旧数据/DOM，视觉上隐藏。 */
+  .node .dot { display: none; }
   .node[data-kind="doc"]    .dot { background: #16a34a; }
   .node[data-kind="output"] .dot { background: #eab308; }
   .node .title { flex: 1 1 auto; min-width: 24px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: grab; }
@@ -1035,11 +1038,7 @@
   .fav-md h1, .fav-md h2, .fav-md h3 { margin: 8px 0 6px; }
   .fav-md pre { background: #f6f7f9; padding: 8px; border-radius: 8px; overflow: auto; }
   .fav-img { max-width: 100%; border-radius: 8px; display: block; }
-  /* 节点标题栏的 ⭐：默认淡，hover 变亮 */
-  .node .fav-node {
-    background: transparent; color: #b9bbc3; padding: 0 3px; font-size: 12px;
-  }
-  .node .fav-node:hover { background: #fef3c7; color: #d97706; }
+  /* 标题栏 ⭐ 的样式已合并到上方的 `.node .bar .fav-node` 规则 */
 
   .sb-head {
     display: flex; align-items: center; gap: 8px;

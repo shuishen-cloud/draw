@@ -87,7 +87,7 @@ export function renderNode(node) {
     <div class="bar">
       <button class="node-color" type="button" title="设置卡片颜色"></button>
       <span class="title" title="双击可重命名"></span>
-      <button class="fav-node" type="button" title="收藏此节点">⭐</button>
+      <button class="fav-node" type="button" title="收藏此节点" aria-label="收藏此节点"><i class="ic ic-star"></i></button>
       <button class="run-node" type="button" title="运行此节点">▶</button>
       <button class="md-toggle" type="button" title="切换 编辑 / 预览">预览</button>
       <select class="zone-pick" title="归属区域（大纲章节）"></select>
@@ -214,7 +214,7 @@ export function renderNode(node) {
   bar.addEventListener('pointerdown', (e) => {
     // 标题栏里的控件各自处理交互，不能连带拖动节点。
     // 用 closest 而不是 classList，确保点到控件内部子元素也不误触。
-    if (e.target.closest('.close, .zone-pick, .md-toggle, .run-node, .fav-node')) return;
+    if (e.target.closest('.close, .zone-pick, .md-toggle, .run-node, .fav-node, .node-color')) return;
     selectNode(node.id);
     startDrag(e, node);
   });
