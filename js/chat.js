@@ -1,4 +1,4 @@
-import { API_URL, DBG, PREFIX, state } from './state.js';
+import { API_URL, DBG, HOST, PREFIX, state } from './state.js';
 import { redrawEdges } from './edges.js';
 import { renderMarkdown } from './md.js';
 import { drawMiniMap } from './minimap.js';
@@ -231,7 +231,10 @@ export function bindSidebar() {
   });
   document.getElementById('clearChat').addEventListener('click', clearChat);
   document.getElementById('toggleSidebar').addEventListener('click', () => {
-    document.getElementById('sidebar').classList.toggle('collapsed');
+    const el = document.getElementById('sidebar');
+    el.classList.toggle('collapsed');
+    // 窄屏抽屉互斥：打开对话栏时收起大纲栏（否则两者各 78vw 互相遮挡）
+    if (!el.classList.contains('collapsed')) HOST.closeDrawerOthers?.('sidebar');
     // 布局变化后要重画（画布宽度改变会影响连线坐标）
     requestAnimationFrame(() => { redrawEdges(); drawMiniMap(); });
   });

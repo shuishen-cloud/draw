@@ -16,6 +16,9 @@
     <div class="ol-tabs">
       <span class="ol-tab active" data-tab="outline">📑 大纲</span>
       <span class="ol-tab" data-tab="tasks">⚡ 任务</span>
+      <!-- 窄屏抽屉模式下的收起入口：展开时外部 #toggleOutline 会隐藏，
+           没有这个按钮就没有任何路可以收回侧栏 -->
+      <button class="drawer-close" id="olClose" title="收起大纲栏">✕</button>
     </div>
     <div class="ol-pane" id="paneOutline">
       <div class="ol-head">
@@ -98,6 +101,8 @@
       <span class="spacer"></span>
       <button class="ghost" id="clearChat" title="清空对话">清空</button>
       <button class="ghost" id="openFavorites" title="收藏（节点）">⭐ 收藏</button>
+      <!-- 窄屏抽屉模式下的收起入口（同 #olClose） -->
+      <button class="drawer-close" id="sbClose" title="收起对话栏">✕</button>
     </div>
     <!-- 收藏面板：查阅优先（只读预览），预览里的按钮才导入到画布 -->
     <div id="favPanel" hidden>

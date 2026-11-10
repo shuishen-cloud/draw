@@ -165,6 +165,15 @@
   }
   #toggleOutline:hover { background: #f5f6f8; }
 
+  /* 抽屉收起按钮：默认隐藏，仅窄屏（抽屉模式）显示。
+     桌面端侧栏在文档流内，外部 #toggleOutline 一直可点，不需要它。 */
+  .drawer-close {
+    display: none;
+    padding: 0 8px; background: none; border: 0; cursor: pointer;
+    font-size: 15px; line-height: 1; color: #666;
+  }
+  .drawer-close:hover { color: #111; }
+
   /* ---------- 区域（Zone）---------- */
   .zone {
     position: absolute; z-index: 0;
@@ -796,12 +805,37 @@
   #sidebar.collapsed .sb-body, #sidebar.collapsed .sb-head { display: flex; }
   #outline.collapsed .ol-body, #sidebar.collapsed .sb-body { display: block; }
 
-  /* 折叠/展开按钮必须高于侧栏浮层（z-index:50）。
-     真实事故：#toggleOutline/#toggleSidebar 原本只有 z-index:31，位置在
-     left/right:16px; top:16px —— 恰好落在侧栏头部（.ol-tabs / .sb-head）上方。
-     侧栏展开后按钮被盖住，elementFromPoint 命中的是 .ol-tab 而不是按钮，
-     于是“一展开就再也收不回去”。只提层级、不改位置。 */
-  #toggleOutline, #toggleSidebar { z-index: 51; }
+  /* 折叠按钮的位置与层级 —— 这里踩过三次坑，完整因果如下：
+
+     坑 1（原状：z-index:31，侧栏 50）：按钮 left/right:16px; top:16px
+     恰好落在侧栏头部（.ol-tabs / .sb-head）上方，被浮层侧栏盖住，
+     elementFromPoint 命中 .ol-tab 而不是按钮 → **一展开就再也收不回去**。
+
+     坑 2（只把 z-index 提到 51）：按钮变成盖住侧栏头部内容，
+     侧栏里的「⭐ 收藏」「清空」反而点不到了（旧内容被新层级反向撞车）。
+
+     坑 3（让按钮随侧栏平移出去）：900px 可用，但 420px 下侧栏宽 78vw，
+     两个按钮平移后互相重叠，反而更点不到。
+
+     最终做法：窄屏侧栏本质是「抽屉」。抽屉展开时，外部开关就该让位——
+     直接把外部按钮隐藏，由侧栏头部自己的「✕ 收起」负责关闭（见 #olClose/#sbClose）。
+     这样任意宽度都不会重叠，也不会遮挡侧栏内容。 */
+  body:has(#outline:not(.collapsed)) #toggleOutline,
+  body:has(#sidebar:not(.collapsed)) #toggleSidebar {
+    display: none;
+  }
+  /* 侧栏展开时，由侧栏自己的 ✕ 收起 */
+  #olClose, #sbClose { display: block; flex: none; }
+  /* 收藏面板打开时会在 z-index:60 上盖住整个侧栏（包括 .sb-head），
+     把抽屉 ✕ 提到它之上，否则面板一开就失去了「收起整个侧栏」的入口。
+     只窄屏需要（桌面侧栏在文档流内，外部 toggle 一直可点）。 */
+  #sidebar #sbClose {
+    position: absolute; right: 10px; top: 8px;
+    z-index: 61;
+    padding: 4px 8px;
+    background: rgba(255,255,255,.9);
+    border-radius: 6px;
+  }
 
   /* 工具栏：缩小、允许换行、贴左上角 */
   /* 平板/中等宽度：工具栏全宽贴底，按钮横向滚动，避免被挤成竖排 */

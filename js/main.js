@@ -27,6 +27,19 @@ import {
 // 12.0 多画布：选择器 + 管理菜单
 // =========================================================================
 
+// 窄屏抽屉互斥：两侧栏各占 78vw，同时展开必然互相遮挡（共 156vw），
+// 后开的会盖住先开的头部，连自己的 ✕ 都点不到。抽屉本就是互斥交互，
+// 所以打开一侧时自动收起另一侧。
+// 定义在模块顶层，供 main.js 与 chat.js（bindSidebar）共同使用。
+HOST.closeDrawerOthers = (except) => {
+  if (!HOST.matchMedia || !HOST.matchMedia('(max-width: 1024px)').matches) return;
+  for (const id of ['outline', 'sidebar']) {
+    if (id === except) continue;
+    const el = document.getElementById(id);
+    if (el) el.classList.add('collapsed');
+  }
+};
+
 // 把仓库里的画布清单同步到 <select>
 function refreshCanvasPicker() {
   const sel = document.getElementById('canvasPicker');
@@ -302,10 +315,21 @@ function init() {
   });
   // 触摸设备主入口：运行当前选中的连线 / 节点
   document.getElementById('runSel').addEventListener('click', () => runSelection());
+  // ---- 窄屏抽屉互斥 ----
   document.getElementById('toggleOutline').addEventListener('click', () => {
-    document.getElementById('outline').classList.toggle('collapsed');
+    const el = document.getElementById('outline');
+    el.classList.toggle('collapsed');
+    if (!el.classList.contains('collapsed')) HOST.closeDrawerOthers?.('outline');
     requestAnimationFrame(() => { redrawEdges(); drawMiniMap(); });
   });
+
+  // 窄屏抽屉的收起按钮（展开时外部 toggle 会隐藏，靠这个收回）
+  const collapsePanel = (id) => {
+    document.getElementById(id).classList.add('collapsed');
+    requestAnimationFrame(() => { redrawEdges(); drawMiniMap(); });
+  };
+  document.getElementById('olClose')?.addEventListener('click', () => collapsePanel('outline'));
+  document.getElementById('sbClose')?.addEventListener('click', () => collapsePanel('sidebar'));
 
   // ---- 视口控件 ----
   // 缩放锚点统一取「可见容器中心」：
